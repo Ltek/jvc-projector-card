@@ -1,0 +1,14 @@
+# Changelog
+
+## v2026.10.13.1
+
+First release. Same design as the Lumagen Card.
+
+- Header: power button (tap to turn on, hold for standby) that shows the power state — warming up (orange, pulsing), cooling down (cyan; turning on is blocked until standby), error (red); link dot; live summary (signal · content type · picture mode); red "Offline" when the integration can't reach the projector.
+- Standby: collapses to a one-line bar instead of disappearing (option to hide the card instead; always shown while editing). Standby message below / inline / hidden or your own text, optional power button on the right, optional hold-to-turn-on.
+- Status: Signal (resolution & rate, input, colorimetry) › Picture (picture mode, content type, dynamic control) › Laser (power bar, light-source hours).
+- Status tags that appear only when active: HDR10 / HDR10+ / HLG, NO SIGNAL, OUT OF RANGE, DCI, LINK DOWN.
+- Collapsible sections (collapsed by default, or chosen to start open): Remote (Hide / Info / Menu / Back, OK and arrows — hold an arrow to repeat 5× — plus menu shortcut buttons), Picture (picture mode and dynamic control chips), Laser (slider, − / +, Low / Mid / High), Source (HDMI 1 / 2), Info.
+- A tapped option shows as "sending" until the projector's next poll confirms it.
+- Entities found by the integration's translation keys (renamed entity IDs keep working); readable names for the integration's raw values.
+- Visual editor: Device, Card & sections, Buttons (hide picture modes / dynamic / inputs, menu shortcuts, laser step), Icons, Appearance (sizes, four-mode colors, transparent backgrounds) and context colors.
