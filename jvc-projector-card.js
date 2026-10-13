@@ -1,17 +1,18 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.13.1
+// Version: v2026.10.13.2
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
-// changes by accident. For the `jvc_projector_ha` integration
-// (github.com/mjmcg/jvc_projector_ha). Same design as the Lumagen Card.
+// changes by accident. For the `jvc_projector_ha` integration — the Ltek version
+// (github.com/Ltek/jvc-projector) adds lens memory, anamorphic, low latency and HDR
+// settings; mjmcg's original also works without them. Same design as the Lumagen Card.
 //
 // Vanilla JS, single file, light DOM. The card stylesheet is a constant (no config
 // values interpolated); per-card values are custom properties set inline on the
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.13.1';
+const BUILD_NUMBER = 'v2026.10.13.2';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -33,6 +34,12 @@ const ENTITY_KEYS = {
   dynamic: ['select', 'jvc_dynamic_ctrl', 'dynamic_control'],
   laser: ['number', 'jvc_ld_power', 'ld_power'],
   signal: ['binary_sensor', 'jvc_signal_present', 'signal_present'],
+  // Ltek integration only (absent with mjmcg's): the rows just don't appear.
+  lens: ['select', 'jvc_installation_mode', 'installation_mode'],
+  anamorphic: ['select', 'jvc_anamorphic', 'anamorphic'],
+  hdr_proc: ['select', 'jvc_hdr_processing', 'hdr_processing'],
+  hdr_level: ['select', 'jvc_hdr_level', 'hdr_level'],
+  low_latency: ['switch', 'jvc_low_latency', 'low_latency'],
 };
 
 // Optional entities (disabled by default in the integration) the card makes use of → friendly name
@@ -78,9 +85,9 @@ function resolveEntities(hass, deviceId) {
 const PICTURE_MODES = {
   natural: 'Natural', cinema: 'Cinema', vivid: 'Vivid', filmmaker: 'Filmmaker', sdr1: 'SDR 1', sdr2: 'SDR 2',
   frame_adapt_hdr: 'Frame Adapt HDR', frame_adapt_hdr2: 'Frame Adapt HDR 2', hdr1: 'HDR 1', hdr2: 'HDR 2',
-  'hdr10+': 'HDR10+', hlg: 'HLG',
+  'hdr10+': 'HDR10+', hdr10_plus: 'HDR10+', hlg: 'HLG',
 };
-const CONTENT_TYPES = { sdr: 'SDR', hdr10: 'HDR10', 'hdr10+': 'HDR10+', hlg: 'HLG', auto: 'Auto' };
+const CONTENT_TYPES = { sdr: 'SDR', hdr10: 'HDR10', 'hdr10+': 'HDR10+', hdr10_plus: 'HDR10+', hlg: 'HLG', auto: 'Auto' };
 const DYNAMIC = { off: 'Off', low: 'Low', high: 'High', balanced: 'Balanced' };
 const INPUTS = { hdmi1: 'HDMI 1', hdmi2: 'HDMI 2' };
 const POWER = { on: 'On', standby: 'Standby', warming: 'Warming up', cooling: 'Cooling down', error: 'Error' };
@@ -89,7 +96,17 @@ const COLORIMETRY = {
   adobe_ycc601: 'Adobe YCC 601', adobe_rgb: 'Adobe RGB', srgb: 'sRGB', dci_p3_d65: 'DCI-P3 D65', dci_p3_theater: 'DCI-P3 Theater',
   'bt2020(constant_luminance)': 'BT.2020 CL', 'bt2020(non-constant_luminance)': 'BT.2020', bt2020_cl: 'BT.2020 CL', bt2020_ncl: 'BT.2020',
 };
-const HDR_TYPES = ['hdr10', 'hdr10+', 'hlg'];
+const HDR_TYPES = ['hdr10', 'hdr10+', 'hdr10_plus', 'hlg'];
+// Ltek integration settings
+const LENS_MEMORIES = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`memory_${i + 1}`, String(i + 1)]));
+const ANAMORPHIC = { off: 'Off', a: 'A', b: 'B', c: 'C', d: 'D' };
+const HDR_PROCESSING = { hdr10_plus: 'HDR10+', static: 'Static', frame_by_frame: 'Frame', scene_by_scene: 'Scene' };
+const HDR_LEVEL = { auto: 'Auto', minus_2: '−2', minus_1: '−1', zero: '0', plus_1: '+1', plus_2: '+2', auto_wide: 'Auto wide' };
+const ON_OFF = { off: 'Off', on: 'On' };
+
+/** Source Display state class: the Ltek integration reports keys (no_signal), mjmcg's raw text (No Signal). */
+const isNoSignal = (v) => v === 'No Signal' || v === 'no_signal';
+const isOutOfRange = (v) => v === 'Out of Range' || v === 'out_of_range';
 
 // Remote keys offered as one-tap menu shortcuts: [command, label]
 const MENU_KEYS = [
@@ -115,14 +132,18 @@ function pretty(map, v) {
 /** Source Display (IFIS) → compact label: '4k(3840)24' → '2160p24', '4k(4096)24' → '4K DCI 24'. */
 function fmtSource(v) {
   if (!okState(v)) return '—';
-  if (v === 'No Signal') return 'No signal';
-  if (v === 'Out of Range') return 'Out of range';
-  let m = /^4k\((\d+)\)(\d+)$/i.exec(v);
-  if (m) return m[1] === '4096' ? `4K DCI ${m[2]}` : `2160p${m[2]}`;
-  m = /^2048x1080 p(\d+)$/i.exec(v);
+  if (isNoSignal(v)) return 'No signal';
+  if (isOutOfRange(v)) return 'Out of range';
+  // '4k(3840)24' (mjmcg) or '4k_3840_24' (Ltek)
+  let m = /^4k(?:\((\d+)\)|_(\d+)_)(\d+)$/i.exec(v);
+  if (m) return (m[1] || m[2]) === '4096' ? `4K DCI ${m[3]}` : `2160p${m[3]}`;
+  m = /^2048x1080[ _]p(\d+)$/i.exec(v);
   if (m) return `2K DCI ${m[1]}`;
   m = /^([A-Z]+)\(.*\)$/.exec(v);
   if (m) return m[1];
+  m = /^([a-z]+)_\d+x\d+$/.exec(v); // 'wuxga_1920x1200'
+  if (m) return m[1].toUpperCase();
+  if (/^(qxga|wqhd\d+)$/.test(v)) return v.toUpperCase();
   return String(v);
 }
 
@@ -165,7 +186,7 @@ const SECTIONS = [
   ['show_status', 'Status (signal → picture → laser) and tags'],
   ['show_remote', 'Remote section'],
   ['show_menus', 'Remote section: menu shortcuts (MPC, Gamma…)'],
-  ['show_picture', 'Picture section: picture mode and dynamic control'],
+  ['show_picture', 'Picture section: picture mode, dynamic control, lens memory, anamorphic, HDR, low latency'],
   ['show_laser', 'Laser section'],
   ['show_laser_presets', 'Laser section: Low / Mid / High buttons'],
   ['show_inputs', 'Source section: inputs'],
@@ -245,6 +266,7 @@ const HIDE_LISTS = {
   hide_modes: { entity: 'mode', labels: PICTURE_MODES },
   hide_dynamic: { entity: 'dynamic', labels: DYNAMIC },
   hide_inputs: { entity: 'input', labels: INPUTS },
+  hide_lens: { entity: 'lens', labels: LENS_MEMORIES },
 };
 const STANDBY_TEXT = [['below', 'Below the title'], ['inline', 'Inline with the title'], ['hidden', 'Hidden']];
 
@@ -447,13 +469,14 @@ const CARD_CSS = `
 .jvc-fold > summary .jvc-peek { font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .jvc-row { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; }
-.jvc-row-l { flex: 0 0 64px; padding-top: 6px; font-size: var(--jvc-subtitle-size, 12px); color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
+.jvc-row-l { flex: 0 0 88px; padding-top: 6px; font-size: var(--jvc-subtitle-size, 12px); color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
 .jvc-opts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .jvc-chip { padding: 5px 10px; border: 1px solid var(--jvc-chip-border-color, rgba(127,127,127,0.35)); border-radius: 8px; cursor: pointer;
   background: var(--jvc-chip-background, transparent); color: var(--jvc-chip-color, var(--primary-text-color));
   font-size: var(--jvc-chip-size, 13px); white-space: nowrap; transition: background .2s, border-color .2s; }
 .jvc-chip:hover { border-color: var(--jvc-ctx); }
 .jvc-chip.on { background: var(--jvc-ctx); border-color: var(--jvc-ctx); color: #fff; }
+.jvc-chip.ro { cursor: default; }
 .jvc-chip.pend { border-style: dashed; border-color: var(--jvc-ctx); color: var(--jvc-ctx); animation: jvc-pulse 1.2s ease-in-out infinite; }
 .jvc-held { outline: 2px solid var(--jvc-ctx); outline-offset: 1px; }
 .jvc.is-off .jvc-ctl, .jvc.is-down .jvc-ctl { opacity: .45; pointer-events: none; }
@@ -583,6 +606,11 @@ class JvcProjectorCard extends HTMLElement {
             <div class="jvc-ctl">
               <div class="jvc-row" data-row="mode"><div class="jvc-row-l">Mode</div><div class="jvc-opts" data-opts="mode"></div></div>
               <div class="jvc-row" data-row="dynamic"><div class="jvc-row-l">Dynamic</div><div class="jvc-opts" data-opts="dynamic"></div></div>
+              <div class="jvc-row" data-row="lens"><div class="jvc-row-l">Lens memory</div><div class="jvc-opts" data-opts="lens"></div></div>
+              <div class="jvc-row" data-row="anamorphic"><div class="jvc-row-l">Anamorphic</div><div class="jvc-opts" data-opts="anamorphic"></div></div>
+              <div class="jvc-row" data-row="hdr_proc"><div class="jvc-row-l">HDR processing</div><div class="jvc-opts" data-opts="hdr_proc"></div></div>
+              <div class="jvc-row" data-row="hdr_level"><div class="jvc-row-l">HDR level</div><div class="jvc-opts" data-opts="hdr_level"></div></div>
+              <div class="jvc-row" data-row="low_latency"><div class="jvc-row-l">Low latency</div><div class="jvc-opts" data-opts="low_latency"></div></div>
             </div>`)}
           ${fold('laser', 'Laser', `
             <div class="jvc-ctl">
@@ -680,7 +708,8 @@ class JvcProjectorCard extends HTMLElement {
   _select(entityId, option) {
     if (!entityId) return;
     this._markPending(entityId, option);
-    this._call('select', 'select_option', { entity_id: entityId, option });
+    if (entityId.startsWith('switch.')) this._call('switch', option === 'on' ? 'turn_on' : 'turn_off', { entity_id: entityId });
+    else this._call('select', 'select_option', { entity_id: entityId, option });
     this._update(true);
   }
 
@@ -727,7 +756,7 @@ class JvcProjectorCard extends HTMLElement {
         break;
       case 'remote': if (remote) this._call('remote', 'send_command', { entity_id: remote, command: el.dataset.cmd }); break;
       case 'remote-repeat':
-        // The integration ignores num_repeats; a list of five is sent one by one (0.15 s apart).
+        // A list of five, sent one by one 0.15 s apart. (mjmcg's integration ignores num_repeats; a list works with both.)
         if (remote) this._call('remote', 'send_command', { entity_id: remote, command: Array(5).fill(el.dataset.cmd) });
         break;
       case 'laser-step': {
@@ -805,7 +834,7 @@ class JvcProjectorCard extends HTMLElement {
     const summary = !found ? 'No JVC projector found — pick a device in the card editor'
       : isDown ? 'Offline'
         : !isOn ? (POWER[ps] || pretty({}, ps) || 'Standby')
-          : [src && src !== 'No Signal' ? fmtSource(src) : 'No signal', pretty(CONTENT_TYPES, content), pretty(PICTURE_MODES, v('mode'))].filter(Boolean).join(' · ');
+          : [src && !isNoSignal(src) ? fmtSource(src) : 'No signal', pretty(CONTENT_TYPES, content), pretty(PICTURE_MODES, v('mode'))].filter(Boolean).join(' · ');
     const standby = found && !isDown && (ps === 'standby' || ps === 'off');
     const sbMode = cfg(c, 'standby_text');
     const sbButton = standby && cfg(c, 'standby_button');
@@ -821,7 +850,7 @@ class JvcProjectorCard extends HTMLElement {
       const sec = el.dataset.sec;
       let show = cfg(c, { status: 'show_status', source: 'show_inputs' }[sec] || `show_${sec}`);
       if (sec === 'remote') show = show && !!E.remote;
-      if (sec === 'picture') show = show && !!(E.mode || E.dynamic);
+      if (sec === 'picture') show = show && !!(E.mode || E.dynamic || E.lens || E.anamorphic || E.low_latency);
       if (sec === 'laser') show = show && !!E.laser;
       if (sec === 'source') show = show && !!E.input;
       el.hidden = !show;
@@ -847,16 +876,28 @@ class JvcProjectorCard extends HTMLElement {
     const tags = [];
     if (isDown) tags.push(['LINK DOWN', 'bad']);
     if (isHdr) tags.push([pretty(CONTENT_TYPES, content), 'hdr']);
-    if (live && src === 'No Signal') tags.push(['NO SIGNAL', 'bad']);
-    if (live && src === 'Out of Range') tags.push(['OUT OF RANGE', 'bad']);
+    if (live && isNoSignal(src)) tags.push(['NO SIGNAL', 'bad']);
+    if (live && isOutOfRange(src)) tags.push(['OUT OF RANGE', 'bad']);
     if (live && okState(src) && /4096|2048/.test(src)) tags.push(['DCI', '']);
+    if (live && v('low_latency') === 'on') tags.push(['LOW LATENCY', '']);
     html(K.tags, tags.map(([t, cls]) => `<span class="jvc-tag ${cls}">${esc(t)}</span>`).join(''));
 
     // chip rows
     this._chips('mode', E.mode, st('mode'), PICTURE_MODES, 'hide_modes');
     this._chips('dynamic', E.dynamic, st('dynamic'), DYNAMIC, 'hide_dynamic');
     this._chips('input', E.input, st('input'), INPUTS, 'hide_inputs');
-    this.querySelectorAll('[data-row]').forEach((row) => { row.hidden = !E[row.dataset.row]; });
+    this._chips('lens', E.lens, st('lens'), LENS_MEMORIES, 'hide_lens');
+    this._chips('anamorphic', E.anamorphic, st('anamorphic'), ANAMORPHIC);
+    // HDR10+ processing is chosen by the projector for HDR10+ content; it can't be tapped.
+    this._chips('hdr_proc', E.hdr_proc, st('hdr_proc'), HDR_PROCESSING, null, ['hdr10_plus']);
+    this._chips('hdr_level', E.hdr_level, st('hdr_level'), HDR_LEVEL);
+    this._chips('low_latency', E.low_latency, st('low_latency'), ON_OFF, null, [], ['off', 'on']);
+    // HDR rows only while HDR plays (the integration makes them unavailable otherwise).
+    const condRows = { hdr_proc: true, hdr_level: true };
+    this.querySelectorAll('[data-row]').forEach((row) => {
+      const key = row.dataset.row;
+      row.hidden = !E[key] || (condRows[key] && !okState(v(key)));
+    });
 
     // laser
     const range = K.laser_range;
@@ -873,7 +914,8 @@ class JvcProjectorCard extends HTMLElement {
       const el = this.querySelector(`[data-peek="${sec}"]`);
       if (el && el.textContent !== text) el.textContent = text;
     };
-    peek('picture', [pretty(PICTURE_MODES, v('mode')), okState(v('dynamic')) ? `Dynamic ${pretty(DYNAMIC, v('dynamic'))}` : ''].filter(Boolean).join(' · '));
+    peek('picture', [pretty(PICTURE_MODES, v('mode')), okState(v('dynamic')) ? `Dynamic ${pretty(DYNAMIC, v('dynamic'))}` : '',
+      okState(v('lens')) ? `Lens ${pretty(LENS_MEMORIES, v('lens'))}` : ''].filter(Boolean).join(' · '));
     peek('laser', laserShown === null ? '' : `${laserShown}%`);
     peek('source', input);
     peek('info', isDown ? 'not reachable' : (okState(v('model')) ? v('model') : fmtHours(v('hours'))));
@@ -882,10 +924,14 @@ class JvcProjectorCard extends HTMLElement {
     const rows = [
       ['Model', okState(v('model')) ? v('model') : ''],
       ['Power', isDown ? 'Not reachable' : pretty(POWER, ps)],
-      ['Signal', okState(src) ? pretty({ 'No Signal': 'No signal', 'Out of Range': 'Out of range' }, src) : ''],
+      ['Signal', okState(src) ? fmtSource(src) : ''],
       ['Input', input],
       ['Colorimetry', pretty(COLORIMETRY, v('colorimetry'))],
       ['Content', pretty(CONTENT_TYPES, content)],
+      ['Lens memory', okState(v('lens')) ? `Memory ${pretty(LENS_MEMORIES, v('lens'))}` : ''],
+      ['Anamorphic', pretty(ANAMORPHIC, v('anamorphic'))],
+      ['HDR processing', pretty(HDR_PROCESSING, v('hdr_proc'))],
+      ['Low latency', pretty(ON_OFF, v('low_latency'))],
       ['Light source', fmtHours(v('hours'))],
     ].filter(([, val]) => val);
     html(K.info, rows.map(([l, val]) => `<span>${esc(l)}</span><b>${esc(val)}</b>`).join(''));
@@ -901,19 +947,25 @@ class JvcProjectorCard extends HTMLElement {
     this._applyVisibility();
   }
 
-  _chips(name, entityId, state, labels, hideKey) {
+  /** Option chips for a select (or a switch, with fixed ['off', 'on']). readOnly values show but can't be tapped. */
+  _chips(name, entityId, state, labels, hideKey, readOnly = [], fixed = null) {
     const box = this.querySelector(`[data-opts="${name}"]`);
     if (!box) return;
-    const hidden = new Set(this._config[hideKey] || []);
-    const all = (state && state.attributes && state.attributes.options) || [];
-    const options = all.filter((o) => !hidden.has(String(o)));
+    const hidden = new Set((hideKey && this._config[hideKey]) || []);
+    const all = fixed || (state && state.attributes && state.attributes.options) || [];
+    const current0 = state ? state.state : null;
+    // a read-only value only appears while it is the current one
+    const options = all.filter((o) => !hidden.has(String(o)) && (!readOnly.includes(o) || o === current0));
     const sig = JSON.stringify([entityId, options]);
     if (this._optSig[name] !== sig) {
       this._optSig[name] = sig;
-      box.innerHTML = options.map((o) => `<button class="jvc-chip" data-opt="${esc(o)}" data-ent="${esc(entityId)}" title="${esc(o)}">${esc(pretty(labels, o))}</button>`).join('');
+      box.innerHTML = options.map((o) => (readOnly.includes(o)
+        ? `<span class="jvc-chip ro" title="${esc(o)}">${esc(pretty(labels, o))}</span>`
+        : `<button class="jvc-chip" data-opt="${esc(o)}" data-ent="${esc(entityId)}" title="${esc(o)}">${esc(pretty(labels, o))}</button>`)).join('');
     }
     const current = state ? state.state : null;
     const pend = this._pendingFor(entityId, current);
+    box.querySelectorAll('.jvc-chip.ro').forEach((b) => b.classList.toggle('on', pend === null));
     box.querySelectorAll('[data-opt]').forEach((b) => {
       b.classList.toggle('on', b.dataset.opt === current && pend === null);
       b.classList.toggle('pend', pend !== null && b.dataset.opt === String(pend));
@@ -1177,6 +1229,7 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${group('Picture mode', 'hide_modes')}
       ${group('Dynamic control', 'hide_dynamic')}
       ${group('Input', 'hide_inputs')}
+      ${group('Lens memory', 'hide_lens')}
       ${menus}${laser}`;
   }
 
@@ -1341,7 +1394,7 @@ class JvcProjectorCardEditor extends HTMLElement {
 JvcProjectorCard._test = {
   BUILD_NUMBER, CARD_CSS, EDITOR_CSS, DEFAULTS, ENTITY_KEYS, OPTIONAL_ENTITIES, STYLE_DEFS, ICON_DEFAULTS, MENU_KEYS, DEFAULT_MENU_KEYS,
   normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
-  PICTURE_MODES, COLORIMETRY,
+  PICTURE_MODES, COLORIMETRY, CONTENT_TYPES, LENS_MEMORIES, HDR_PROCESSING, HDR_LEVEL, isNoSignal,
 };
 
 if (!customElements.get(CARD_TAG)) customElements.define(CARD_TAG, JvcProjectorCard);

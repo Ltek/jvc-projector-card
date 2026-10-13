@@ -2,11 +2,11 @@
 
 A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
 
-Current build: **v2026.10.13.1** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.13.2** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 
-> Requires the **JVC Projector integration** [mjmcg/jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha) (2024 LAN spec).
+> Requires the **JVC Projector integration** (2024 LAN spec): the Ltek version [Ltek/jvc-projector](https://github.com/Ltek/jvc-projector) (recommended: adds lens memory, anamorphic, HDR processing / level and low latency, and fixes remote lag), or the original [mjmcg/jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha).
 
 ---
 
@@ -33,12 +33,12 @@ Status sits on top. **Every control is in a collapsed section**, so nothing chan
 - **Standby** — the card shrinks to its header instead of disappearing, so you can power on from it. Choose where the "Standby · tap the icon to power on" message goes (below, inline, hidden), or show a power button on the right. Optionally require a hold to turn on too, or hide the card in standby (it always shows while you edit the Dashboard).
 - **Collapse** — optionally tap the header to collapse the card to just the header while the projector is on, and start collapsed.
 - **Status** — Signal (resolution & rate, input, colorimetry) › Picture (picture mode, content type, dynamic control) › Laser (power with a bar, light-source hours).
-- **Tags** appear only when active: HDR10 / HDR10+ / HLG, NO SIGNAL, OUT OF RANGE, DCI, LINK DOWN.
+- **Tags** appear only when active: HDR10 / HDR10+ / HLG, NO SIGNAL, OUT OF RANGE, DCI, LOW LATENCY, LINK DOWN.
 - **Remote** — Hide / Info / Menu / Back, OK and arrows; **hold an arrow to repeat it 5×**. Below: one-tap menu shortcuts (MPC, Gamma, Color temp, Lens, Advanced by default — pick your own from 18 keys).
-- **Picture** — picture mode chips (the projector's modes for the current content: SDR, HDR10, HLG…) and dynamic control (Off / Low / High / Balanced).
+- **Picture** — picture mode chips (the projector's modes for the current content: SDR, HDR10, HLG…) and dynamic control (Off / Low / High / Balanced). With the Ltek integration also **Lens memory** (installation mode 1–5 / 1–10, for constant-height screens), **Anamorphic** (Off / A–D), **HDR processing** and **HDR level** (only while HDR plays) and **Low latency** (Off / On).
 - **Laser** — slider, − / + buttons and **Low / Mid / High** (the projector's own laser settings).
 - **Source** — HDMI 1 / HDMI 2.
-- **Info** — model, power, signal, input, colorimetry, content type, light-source hours and the connection state.
+- **Info** — model, power, signal, input, colorimetry, content type, lens memory, anamorphic, HDR processing, low latency, light-source hours and the connection state.
 - **Context tint** — accent normally, HDR color while HDR plays.
 
 The projector is polled every 10 seconds, so a tapped option shows as **sending** (dashed, pulsing) until the projector confirms it.
@@ -85,7 +85,7 @@ Everything is in the visual editor (Device · Card & sections · Buttons · Icon
 | `start_collapsed` | `false` | With `collapsible`, start collapsed. |
 | `open_sections` | | Sections already open when the Dashboard loads: `remote`, `picture`, `laser`, `source`, `info`. |
 | `menu_keys` | `[mpc, gamma, color_temp, lens_control, advanced_menu]` | Menu shortcuts under the remote. Any of `mpc` `gamma` `color_temp` `color_profile` `gamma_settings` `pic_adj` `picture_mode` `cmd` `lens_control` `lens_ap` `anamo` `setting_memory` `mode_1` `mode_2` `mode_3` `input` `3d_format` `advanced_menu`; `[]` = none. |
-| `hide_modes` · `hide_dynamic` · `hide_inputs` | | Buttons to hide, by the integration's value (e.g. `[vivid, sdr2]`, `[off]`, `[hdmi2]`). The editor's **Buttons** panel lists them. |
+| `hide_modes` · `hide_dynamic` · `hide_inputs` · `hide_lens` | | Buttons to hide, by the integration's value (e.g. `[vivid, sdr2]`, `[off]`, `[hdmi2]`, `[memory_4, memory_5]`). The editor's **Buttons** panel lists them. |
 | `laser_step` | `5` | How much − / + change the laser power (1–50). |
 | `show_status` · `show_remote` · `show_menus` · `show_picture` · `show_laser` · `show_laser_presets` · `show_inputs` · `show_info` | `true` | Turn parts off. |
 | `accent_color` · `hdr_color` · `warming_color` · `cooling_color` | theme primary · amber · orange · cyan | Context colors. |

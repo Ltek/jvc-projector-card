@@ -1,5 +1,16 @@
 # Changelog
 
+## v2026.10.13.2
+
+For the Ltek integration ([Ltek/jvc-projector](https://github.com/Ltek/jvc-projector)); everything still works with mjmcg's original.
+
+- Picture section: new **Lens memory** row (installation modes 1–5 or 1–10, depending on the model), **Anamorphic** (Off / A–D), **HDR processing** (Static / Frame / Scene; HDR10+ shows when the projector picks it but can't be tapped) and **HDR level**, both only while HDR plays, and **Low latency** (Off / On). Each row appears only if the integration provides that entity.
+- Lens memory on the collapsed Picture header; lens memory, anamorphic, HDR processing and low latency in Info; a LOW LATENCY tag while it's on.
+- `hide_lens` (Buttons panel: Lens memory) hides memories you don't use.
+- Understands the integration's new state keys (`no_signal`, `4k_3840_24`, `hdr10_plus`, `bt2020_cl`…) as well as the old raw values.
+- Info shows the signal as a compact label (2160p24) instead of the raw value.
+- Row labels are wider so the longer names fit on one line.
+
 ## v2026.10.13.1
 
 First release. Same design as the Lumagen Card.
