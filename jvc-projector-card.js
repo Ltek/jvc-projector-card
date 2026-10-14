@@ -1,18 +1,18 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.13.2
+// Version: v2026.10.14.3
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
 // changes by accident. For the `jvc_projector_ha` integration — the Ltek version
-// (github.com/Ltek/jvc-projector) adds lens memory, anamorphic, low latency and HDR
-// settings; mjmcg's original also works without them. Same design as the Lumagen Card.
+// (github.com/Ltek/jvc-projector) adds lens memory, anamorphic, HDR, motion and ECO
+// settings, firmware and a connection sensor; mjmcg's original works without them. Same design as the Lumagen Card.
 //
 // Vanilla JS, single file, light DOM. The card stylesheet is a constant (no config
 // values interpolated); per-card values are custom properties set inline on the
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.13.2';
+const BUILD_NUMBER = 'v2026.10.14.3';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -40,6 +40,17 @@ const ENTITY_KEYS = {
   hdr_proc: ['select', 'jvc_hdr_processing', 'hdr_processing'],
   hdr_level: ['select', 'jvc_hdr_level', 'hdr_level'],
   low_latency: ['switch', 'jvc_low_latency', 'low_latency'],
+  // Ltek integration Phase 3 (Oct 14 2026): present only on models that support them.
+  theater_opt: ['switch', 'jvc_theater_optimizer', 'theater_optimizer'],
+  cmd: ['select', 'jvc_clear_motion_drive', 'clear_motion_drive'],
+  motion: ['select', 'jvc_motion_enhance', 'motion_enhance'],
+  eshift: ['switch', 'jvc_eshift', '8k_e_shift'],
+  eco: ['switch', 'jvc_eco_mode', 'eco_mode'],
+  connection: ['binary_sensor', 'jvc_connection', 'connection'],
+  version: ['sensor', 'jvc_software_version', 'software_version'],
+  color_depth: ['sensor', 'jvc_color_depth', 'color_depth'],
+  color_space: ['sensor', 'jvc_color_space', 'color_space'],
+  hdr_signal: ['sensor', 'jvc_hdr_signal', 'hdr_signal'],
 };
 
 // Optional entities (disabled by default in the integration) the card makes use of → friendly name
@@ -103,6 +114,11 @@ const ANAMORPHIC = { off: 'Off', a: 'A', b: 'B', c: 'C', d: 'D' };
 const HDR_PROCESSING = { hdr10_plus: 'HDR10+', static: 'Static', frame_by_frame: 'Frame', scene_by_scene: 'Scene' };
 const HDR_LEVEL = { auto: 'Auto', minus_2: '−2', minus_1: '−1', zero: '0', plus_1: '+1', plus_2: '+2', auto_wide: 'Auto wide' };
 const ON_OFF = { off: 'Off', on: 'On' };
+const CMD = { off: 'Off', low: 'Low', high: 'High', inverse_telecine: 'Inverse telecine' };
+const MOTION = { off: 'Off', low: 'Low', high: 'High' };
+const COLOR_DEPTH = { '8bit': '8-bit', '10bit': '10-bit', '12bit': '12-bit' };
+const COLOR_SPACE = { rgb: 'RGB', ycbcr_444: 'YCbCr 4:4:4', ycbcr_422: 'YCbCr 4:2:2', ycbcr_420: 'YCbCr 4:2:0' };
+const HDR_SIGNAL = { sdr: 'SDR', hdr: 'HDR', smpte_st_2084: 'HDR10 (PQ)', hybrid_log: 'HLG', hdr10_plus: 'HDR10+', none: 'None' };
 
 /** Source Display state class: the Ltek integration reports keys (no_signal), mjmcg's raw text (No Signal). */
 const isNoSignal = (v) => v === 'No Signal' || v === 'no_signal';
@@ -186,7 +202,7 @@ const SECTIONS = [
   ['show_status', 'Status (signal → picture → laser) and tags'],
   ['show_remote', 'Remote section'],
   ['show_menus', 'Remote section: menu shortcuts (MPC, Gamma…)'],
-  ['show_picture', 'Picture section: picture mode, dynamic control, lens memory, anamorphic, HDR, low latency'],
+  ['show_picture', 'Picture section: picture mode, dynamic control, lens memory, anamorphic, HDR, Theater Optimizer, motion, e-shift, low latency'],
   ['show_laser', 'Laser section'],
   ['show_laser_presets', 'Laser section: Low / Mid / High buttons'],
   ['show_inputs', 'Source section: inputs'],
@@ -610,6 +626,10 @@ class JvcProjectorCard extends HTMLElement {
               <div class="jvc-row" data-row="anamorphic"><div class="jvc-row-l">Anamorphic</div><div class="jvc-opts" data-opts="anamorphic"></div></div>
               <div class="jvc-row" data-row="hdr_proc"><div class="jvc-row-l">HDR processing</div><div class="jvc-opts" data-opts="hdr_proc"></div></div>
               <div class="jvc-row" data-row="hdr_level"><div class="jvc-row-l">HDR level</div><div class="jvc-opts" data-opts="hdr_level"></div></div>
+              <div class="jvc-row" data-row="theater_opt"><div class="jvc-row-l">Theater optimizer</div><div class="jvc-opts" data-opts="theater_opt"></div></div>
+              <div class="jvc-row" data-row="cmd"><div class="jvc-row-l">Motion (CMD)</div><div class="jvc-opts" data-opts="cmd"></div></div>
+              <div class="jvc-row" data-row="motion"><div class="jvc-row-l">Motion enhance</div><div class="jvc-opts" data-opts="motion"></div></div>
+              <div class="jvc-row" data-row="eshift"><div class="jvc-row-l">8K e-shift</div><div class="jvc-opts" data-opts="eshift"></div></div>
               <div class="jvc-row" data-row="low_latency"><div class="jvc-row-l">Low latency</div><div class="jvc-opts" data-opts="low_latency"></div></div>
             </div>`)}
           ${fold('laser', 'Laser', `
@@ -630,6 +650,8 @@ class JvcProjectorCard extends HTMLElement {
             </div>`)}
           ${fold('info', 'Info', `
             <div class="jvc-info" data-k="info"></div>
+            <div class="jvc-row" data-row="eco"><div class="jvc-row-l">ECO mode</div><div class="jvc-opts" data-opts="eco"></div></div>
+            <div class="jvc-note bad" data-k="eco_note" hidden>ECO mode is on: the projector switches its network off in standby, so Home Assistant can't reach it or turn it on until it is turned on with the remote.</div>
             <div class="jvc-note" data-k="link"></div>
             <div class="jvc-note" data-k="missing"></div>`)}
         </div>
@@ -807,8 +829,9 @@ class JvcProjectorCard extends HTMLElement {
     const html = (el, markup) => { if (el && el.innerHTML !== markup) el.innerHTML = markup; };
     const found = !!(E.power_state || E.remote);
     const ps = powerOf(v('power_state'), v('remote'));
-    // Every entity goes unavailable when the integration can't poll the projector.
-    const isDown = found && (ps === 'unavailable' || v('remote') === 'unavailable');
+    // Every entity goes unavailable when the integration can't poll the projector;
+    // the Ltek integration also has a Connection sensor that stays available.
+    const isDown = found && (v('connection') === 'off' || ps === 'unavailable' || v('remote') === 'unavailable');
     this._powerState = isDown ? 'unavailable' : ps;
     const isOn = !isDown && ps === 'on';
     const live = isOn;
@@ -850,7 +873,7 @@ class JvcProjectorCard extends HTMLElement {
       const sec = el.dataset.sec;
       let show = cfg(c, { status: 'show_status', source: 'show_inputs' }[sec] || `show_${sec}`);
       if (sec === 'remote') show = show && !!E.remote;
-      if (sec === 'picture') show = show && !!(E.mode || E.dynamic || E.lens || E.anamorphic || E.low_latency);
+      if (sec === 'picture') show = show && !!(E.mode || E.dynamic || E.lens || E.anamorphic || E.low_latency || E.cmd || E.motion || E.eshift || E.theater_opt);
       if (sec === 'laser') show = show && !!E.laser;
       if (sec === 'source') show = show && !!E.input;
       el.hidden = !show;
@@ -860,7 +883,7 @@ class JvcProjectorCard extends HTMLElement {
     const input = pretty(INPUTS, v('input')) || pretty(INPUTS, v('input_disp'));
     set('s_t', fmtSource(src));
     set('s_1', input || '—');
-    set('s_2', pretty(COLORIMETRY, v('colorimetry')) || '—');
+    set('s_2', [pretty(COLORIMETRY, v('colorimetry')), pretty(COLOR_DEPTH, v('color_depth'))].filter(Boolean).join(' · ') || '—');
     set('p_t', pretty(PICTURE_MODES, v('mode')) || '—');
     set('p_1', pretty(CONTENT_TYPES, content) || '—');
     set('p_2', okState(v('dynamic')) ? `Dynamic ${pretty(DYNAMIC, v('dynamic'))}` : '—');
@@ -880,6 +903,7 @@ class JvcProjectorCard extends HTMLElement {
     if (live && isOutOfRange(src)) tags.push(['OUT OF RANGE', 'bad']);
     if (live && okState(src) && /4096|2048/.test(src)) tags.push(['DCI', '']);
     if (live && v('low_latency') === 'on') tags.push(['LOW LATENCY', '']);
+    if (live && v('eco') === 'on') tags.push(['ECO', 'bad']);
     html(K.tags, tags.map(([t, cls]) => `<span class="jvc-tag ${cls}">${esc(t)}</span>`).join(''));
 
     // chip rows
@@ -892,8 +916,14 @@ class JvcProjectorCard extends HTMLElement {
     this._chips('hdr_proc', E.hdr_proc, st('hdr_proc'), HDR_PROCESSING, null, ['hdr10_plus']);
     this._chips('hdr_level', E.hdr_level, st('hdr_level'), HDR_LEVEL);
     this._chips('low_latency', E.low_latency, st('low_latency'), ON_OFF, null, [], ['off', 'on']);
-    // HDR rows only while HDR plays (the integration makes them unavailable otherwise).
-    const condRows = { hdr_proc: true, hdr_level: true };
+    this._chips('theater_opt', E.theater_opt, st('theater_opt'), ON_OFF, null, [], ['off', 'on']);
+    this._chips('cmd', E.cmd, st('cmd'), CMD);
+    this._chips('motion', E.motion, st('motion'), MOTION);
+    this._chips('eshift', E.eshift, st('eshift'), ON_OFF, null, [], ['off', 'on']);
+    this._chips('eco', E.eco, st('eco'), ON_OFF, null, [], ['off', 'on']);
+    // Rows the integration makes unavailable at times are hidden then: HDR settings
+    // and Theater Optimizer without an HDR source; CMD and Dynamic while Low Latency is on.
+    const condRows = { hdr_proc: true, hdr_level: true, theater_opt: true, cmd: true, dynamic: true, eco: true };
     this.querySelectorAll('[data-row]').forEach((row) => {
       const key = row.dataset.row;
       row.hidden = !E[key] || (condRows[key] && !okState(v(key)));
@@ -932,8 +962,16 @@ class JvcProjectorCard extends HTMLElement {
       ['Anamorphic', pretty(ANAMORPHIC, v('anamorphic'))],
       ['HDR processing', pretty(HDR_PROCESSING, v('hdr_proc'))],
       ['Low latency', pretty(ON_OFF, v('low_latency'))],
+      ['Theater optimizer', pretty(ON_OFF, v('theater_opt'))],
+      ['Motion (CMD)', pretty(CMD, v('cmd'))],
+      ['8K e-shift', pretty(ON_OFF, v('eshift'))],
+      ['Color depth', pretty(COLOR_DEPTH, v('color_depth'))],
+      ['Color space', pretty(COLOR_SPACE, v('color_space'))],
+      ['HDR signal', pretty(HDR_SIGNAL, v('hdr_signal'))],
       ['Light source', fmtHours(v('hours'))],
+      ['Firmware', okState(v('version')) ? v('version') : ''],
     ].filter(([, val]) => val);
+    if (K.eco_note) K.eco_note.hidden = !(okState(v('eco')) && v('eco') === 'on');
     html(K.info, rows.map(([l, val]) => `<span>${esc(l)}</span><b>${esc(val)}</b>`).join(''));
     set('link', !found ? '' : isDown
       ? 'The integration cannot reach the projector (it is polled every 10 s). Check its network connection and the network password.'

@@ -1,5 +1,15 @@
 # Changelog
 
+## v2026.10.14.3
+
+For the Ltek integration v2026.10.14.3; everything still works with mjmcg's original and older Ltek builds.
+
+- Picture section: **Theater Optimizer** (Off / On, only while HDR plays), **Motion (CMD)** (Clear Motion Drive: Off / Low / High / Inverse telecine — the options your model has), **Motion enhance** and **8K e-shift**. Rows appear only on models that have the setting.
+- CMD and Dynamic rows hide while the projector disables them (Low latency on).
+- Info: **firmware version**, color depth, color space, HDR signal, Theater Optimizer, CMD and e-shift; an **ECO mode** Off / On row, with a warning and an ECO tag while it's on (the projector can't be reached in standby then).
+- Signal box shows the bit depth next to the colorimetry (BT.2020 · 10-bit).
+- Uses the integration's **Connection** sensor for the link dot and "Offline".
+
 ## v2026.10.13.2
 
 For the Ltek integration ([Ltek/jvc-projector](https://github.com/Ltek/jvc-projector)); everything still works with mjmcg's original.
