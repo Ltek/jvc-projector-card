@@ -9,6 +9,7 @@ For the Ltek integration v2026.10.14.3; everything still works with mjmcg's orig
 - Info: **firmware version**, color depth, color space, HDR signal, Theater Optimizer, CMD and e-shift; an **ECO mode** Off / On row, with a warning and an ECO tag while it's on (the projector can't be reached in standby then).
 - Signal box shows the bit depth next to the colorimetry (BT.2020 · 10-bit).
 - Uses the integration's **Connection** sensor for the link dot and "Offline".
+- The 8K e-shift row appears on the NZ800 / NZ900, NZ7 / NZ8 / NZ9 and NX9 (the integration decides which models have it).
 
 ## v2026.10.13.2
 
