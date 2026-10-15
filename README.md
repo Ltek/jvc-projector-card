@@ -2,7 +2,7 @@
 
 A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
 
-Current build: **v2026.10.15.9** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.15.10** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 
@@ -29,7 +29,7 @@ Status sits on top. **Every control is in a collapsed section**, so nothing chan
  ⓘ Info     DLA-NZ700                             ›
 ```
 
-- **Header** — the icon is the power button: tap to turn the projector on, **hold** for standby (a stray tap can't stop your movie). It shows the power state: context color when on, orange and pulsing while **warming up**, cyan while **cooling down** (it can't be turned on until it reaches standby), red on **error**. The dot is the link: green = the integration reaches the projector, red = it can't; the summary then reads *Offline* in red.
+- **Header** — the icon is the power button: tap to turn the projector on, **hold** for standby (a stray tap can't stop your movie). Without a hold — keyboard, screen reader — tap twice within 4 seconds: the first tap asks, the second confirms. It shows the power state: context color when on, orange and pulsing while **warming up**, cyan while **cooling down** (it can't be turned on until it reaches standby), red on **error**. The dot is the link: green = the integration reaches the projector, red = it can't; the summary then reads *Offline* in red.
 - **Standby** — choose what the card does while the projector is in standby / off: **hide the entire card**, **collapse to the header** (the default; you can still power on from it) or **keep expanded**. In the card editor it always starts expanded, so every section can be set up. Choose where the "Standby · tap the icon to power on" message goes (below, inline, hidden), or show a power button on the right. Optionally require a hold to turn on too, or hide the card in standby (it always shows while you edit the Dashboard).
 - **Collapse** — optionally tap the header to collapse the card to just the header while the projector is on, and start collapsed.
 - **Status** — Signal (resolution & rate, input, colorimetry and bit depth) › Picture (picture mode, content type, dynamic control) › Laser (power with a bar, light-source hours).
@@ -78,7 +78,7 @@ Everything is in the visual editor (Card (with the device picker) · Sections ·
 | `standby_text` | `below` | Standby message: `below` the title, `inline` with it, or `hidden`. |
 | `standby_message` | stock text | Your own standby message; empty = "Standby · tap the icon to power on". |
 | `standby_button` | `false` | In standby, replace the right-hand "Standby" with a power button that turns the projector on. |
-| `power_hold_on` | `false` | Require a press-and-hold to turn **on** too (standby always needs a hold). |
+| `power_hold_on` | `false` | Require a press-and-hold to turn **on** too (standby always needs a hold or a double tap). |
 | `show_dot` | `true` | Show the link dot. |
 | `dot_position` | `title` | `title` (right of the title), `right` (far right), or `icon` (replaces the header icon; it is then the power button). |
 | `collapsible` | `false` | Tap the header to collapse the card to just the header while the projector is on. |

@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.9
+// Version: v2026.10.15.10
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.9';
+const BUILD_NUMBER = 'v2026.10.15.10';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -315,6 +315,8 @@ const SECTION_ITEMS = {
 };
 // Sections other sections can be merged into, and sections that can't be merged anywhere.
 const MERGE_TARGETS = ['status', 'remote', 'picture', 'laser', 'source', 'info'];
+// Areas that are always visible (not a collapsed section): merged controls there can be hit by accident.
+const ALWAYS_SHOWN = ['status'];
 const NOT_MERGEABLE = [];
 
 function defaultSectionName(id) { return (SECTION_META[id] || {}).label || id; }
@@ -610,6 +612,7 @@ const CARD_CSS = `
 .jvc-chip.on { background: var(--jvc-ctx); border-color: var(--jvc-ctx); color: #fff; }
 .jvc-chip.ro { cursor: default; }
 .jvc-chip.pend { border-style: dashed; border-color: var(--jvc-ctx); color: var(--jvc-ctx); animation: jvc-pulse 1.2s ease-in-out infinite; }
+.jvc-armed { outline: 2px dashed var(--jvc-ctx); outline-offset: 2px; }
 .jvc-held { outline: 2px solid var(--jvc-ctx); outline-offset: 1px; }
 .jvc.is-off .jvc-ctl, .jvc.is-down .jvc-ctl { opacity: .45; pointer-events: none; }
 .jvc.is-down [data-sec="status"] .jvc-chain { opacity: .45; }
@@ -836,9 +839,11 @@ class JvcProjectorCard extends HTMLElement {
   _bind() {
     const root = this._root;
     const target = (e) => e.target.closest && e.target.closest('[data-tap],[data-hold],[data-opt]');
+    const cancel = () => { if (this._press) { clearTimeout(this._press.timer); this._press = null; } };
     root.addEventListener('pointerdown', (e) => {
       const el = target(e);
       if (!el || el.dataset.opt !== undefined || !el.dataset.hold) return;
+      el.addEventListener('pointerleave', cancel, { once: true }); // sliding off the button cancels the hold
       const press = { el, held: false };
       press.timer = setTimeout(() => {
         press.held = true;
@@ -848,7 +853,6 @@ class JvcProjectorCard extends HTMLElement {
       }, 500);
       this._press = press;
     });
-    const cancel = () => { if (this._press) { clearTimeout(this._press.timer); this._press = null; } };
     root.addEventListener('pointerleave', cancel);
     root.addEventListener('pointercancel', cancel);
     root.addEventListener('contextmenu', (e) => { if (target(e)) e.preventDefault(); });
@@ -861,8 +865,20 @@ class JvcProjectorCard extends HTMLElement {
       if (press && press.el === el && press.held) return; // hold already ran
       if (el.dataset.opt !== undefined) { this._select(el.dataset.ent, el.dataset.opt); return; }
       if (el.dataset.tap) this._run(el.dataset.tap, el);
-      else if (el.dataset.hold) this._toast('Hold to run');
+      else if (el.dataset.hold) this._confirm(el, el.dataset.hold, 'Hold to run it');
     });
+  }
+
+  /** A hold-only action from a tap, Enter or assistive tech: the first asks, a second within 4 s confirms. */
+  _confirm(el, action, message) {
+    const armed = this._armed;
+    this._armed = null;
+    this.querySelectorAll('.jvc-armed').forEach((b) => b.classList.remove('jvc-armed'));
+    if (armed && armed.el === el && armed.action === action && Date.now() - armed.at < 4000) { this._run(action, el); return; }
+    this._armed = { el, action, at: Date.now() };
+    el.classList.add('jvc-armed');
+    setTimeout(() => { if (this._armed && this._armed.el === el && Date.now() - this._armed.at >= 3990) { this._armed = null; el.classList.remove('jvc-armed'); } }, 4000);
+    this._toast(`${message}, or tap again to confirm`);
   }
 
   _toast(message) {
@@ -920,9 +936,9 @@ class JvcProjectorCard extends HTMLElement {
     switch (action) {
       case 'power': {
         // Standby always needs a hold; turning on needs one only when power_hold_on is set.
-        if (ps === 'on' || ps === 'warming') this._toast('Hold to put the projector in standby');
+        if (ps === 'on' || ps === 'warming') this._confirm(el, 'power-hold', 'Hold to put the projector in standby');
         else if (ps === 'cooling') this._toast('Cooling down — the projector can be turned on once it reaches standby');
-        else if (cfg(this._config, 'power_hold_on')) this._toast('Hold to turn the projector on');
+        else if (cfg(this._config, 'power_hold_on')) this._confirm(el, 'power-hold', 'Hold to turn the projector on');
         else if (remote) this._call('remote', 'turn_on', { entity_id: remote });
         break;
       }
@@ -1075,6 +1091,7 @@ class JvcProjectorCard extends HTMLElement {
     this._standbyNow = !isOn && !isDown;
 
     // sections on/off (config) + entity availability
+    const secShown = {};
     this.querySelectorAll('[data-sec]').forEach((el) => {
       const sec = el.dataset.sec;
       let show = cfg(c, { status: 'show_status', source: 'show_inputs' }[sec] || `show_${sec}`);
@@ -1082,7 +1099,14 @@ class JvcProjectorCard extends HTMLElement {
       if (sec === 'picture') show = show && !!(E.mode || E.dynamic || E.lens || E.anamorphic || E.low_latency || E.cmd || E.motion || E.eshift || E.theater_opt);
       if (sec === 'laser') show = show && !!E.laser;
       if (sec === 'source') show = show && !!E.input;
-      el.hidden = !show && !el.querySelector(':scope > .jvc-merged');
+      el.hidden = !show;
+      secShown[sec] = show;
+    });
+    // A merged section's settings show only when that section would show on its own (its entities
+    // exist, HDR is playing…); a target with nothing of its own still shows for merged settings.
+    this.querySelectorAll('.jvc-merged').forEach((w) => { w.hidden = !secShown[w.dataset.from]; });
+    this.querySelectorAll('[data-sec]').forEach((el) => {
+      if (el.hidden && sectionShown(c, el.dataset.sec) && el.querySelector(':scope > .jvc-merged:not([hidden])')) el.hidden = false;
     });
 
     // status boxes: signal › picture › laser
@@ -1382,6 +1406,7 @@ const EDITOR_CSS = `
         .jvce-brow:first-child { border-top: none; }
         .jvce-brow.off .jvce-sname { color: var(--ltek-c-muted); }
         .jvce-act.on { color: var(--ltek-c-accent); }
+        .jvce-warn { color: var(--warning-color, #ff9800); }
         .jvce-stag { flex: 0 0 auto; font-size: var(--ltek-fs-small); color: var(--ltek-c-muted); white-space: nowrap; }
         .jvce-sedit { margin: calc(-1 * var(--ltek-sp-1)) 0 var(--ltek-sp-1) 28px; padding: var(--ltek-sp-2) var(--ltek-sp-3);
           border: 1px solid var(--ltek-c-accent); border-radius: var(--ltek-r-card); background: var(--ltek-c-surface); }
@@ -1402,7 +1427,7 @@ class JvcProjectorCardEditor extends HTMLElement {
   constructor() {
     super();
     this._config = {};
-    this._open = new Set(['device']);
+    this._open = new Set(['card']);
     this._rendered = false;
     this._cmode = {}; // color key -> mode picked in this session (so an empty Custom CSS field stays visible)
   }
@@ -1508,6 +1533,7 @@ class JvcProjectorCardEditor extends HTMLElement {
     else {
       merge = `<div class="jvce-row"><label class="lbl">Show its settings in</label>
         <select data-smerge="${id}"><option value="">— its own section —</option>${targets.map((t) => `<option value="${t}"${t === cur ? ' selected' : ''}>${esc(secLabel(c, t))}</option>`).join('')}</select></div>
+        ${cur && ALWAYS_SHOWN.includes(cur) ? `<p class="jvce-hint jvce-warn">${esc(secLabel(c, cur))} is always visible, not a collapsed section, so these settings can be changed by a stray tap.</p>` : ''}
         <p class="jvce-hint">The section itself disappears from the card; its visible settings appear at the end of the chosen section, under this section's name.${cur && !mergeTarget(c, id) ? ' <b>Not applied now:</b> one of the two sections is hidden.' : ''}</p>`;
     }
     return `<div class="jvce-sedit" data-sedit-panel="${id}">

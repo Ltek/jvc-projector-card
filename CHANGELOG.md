@@ -1,5 +1,13 @@
 # Changelog
 
+## v2026.10.15.10
+
+- **Merged sections follow their own checks.** A merged section's settings now show only when that section would show on its own — e.g. Picture merged elsewhere without its entities no longer leaves an empty heading, and merged controls never appear for a missing entity.
+- **Hold-only actions work without a hold.** Standby (and power-on with *hold to turn on*): a tap asks, a second tap within 4 seconds confirms (the button shows a dashed outline meanwhile). Works with the keyboard and assistive tech.
+- A press-and-hold is cancelled when your finger slides off the button.
+- The editor opens the **Card** panel on start (it tried to open the Device panel, which no longer exists, so everything started collapsed).
+- Choosing to merge into an **always-visible** area (Status) shows a warning: the controls are then outside a collapsed section.
+
 ## v2026.10.15.9
 
 - The **Device** picker moved into the **Card** panel (it was a whole panel for one setting).
