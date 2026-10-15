@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.5
+// Version: v2026.10.15.6
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.5';
+const BUILD_NUMBER = 'v2026.10.15.6';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -175,7 +175,7 @@ function fmtHours(v) {
 const DEFAULTS = {
   device: '',
   title: 'Projector',
-  show_when_off: true,
+  when_off: 'collapse',
   power_hold_on: false,
   standby_text: 'below',
   standby_message: '',
@@ -291,6 +291,10 @@ const HIDE_LISTS = {
   hide_inputs: { entity: 'input', labels: INPUTS },
   hide_lens: { entity: 'lens', labels: LENS_MEMORIES },
 };
+// What the card does while the device is in standby / off.
+const WHEN_OFF = [['hide', 'Hide the entire card'], ['collapse', 'Collapse to the header'], ['expanded', 'Keep expanded']];
+// Ancestors that mean "the Dashboard is being edited / this is the editor preview".
+const EDITOR_WRAPPERS = ['hui-card-preview', 'hui-dialog-edit-card', 'hui-card-edit-mode', 'hui-card-options', 'hui-section-edit-mode'];
 const STANDBY_TEXT = [['below', 'Below the title'], ['inline', 'Inline with the title'], ['hidden', 'Hidden']];
 
 /** String list: trimmed, de-duplicated, empties dropped. */
@@ -304,7 +308,9 @@ function strList(a) {
 }
 
 function normalizeConfig(raw) {
-  const c = raw && typeof raw === 'object' ? raw : {};
+  let c = raw && typeof raw === 'object' ? raw : {};
+  // Legacy `show_when_off: false` (hide the card in standby) → `when_off: hide`.
+  if (c.when_off === undefined && (c.show_when_off === false || c.show_when_off === 'false')) c = { ...c, when_off: 'hide' };
   const out = {};
   if (c.type !== undefined) out.type = c.type;
   Object.keys(DEFAULTS).forEach((k) => {
@@ -360,7 +366,9 @@ function normalizeConfig(raw) {
     if (JSON.stringify(order) !== JSON.stringify(SECTION_IDS)) out.section_order = order;
   }
   const known = ['type', 'icons', 'styles', 'menu_keys', 'open_sections', 'section_order'];
+  if (out.when_off !== undefined && !WHEN_OFF.some(([v]) => v === out.when_off)) delete out.when_off;
   Object.keys(c).forEach((k) => {
+    if (k === 'show_when_off') return; // replaced by when_off
     if (!(k in out) && !(k in DEFAULTS) && !(k in HIDE_LISTS) && !known.includes(k)) out[k] = c[k];
   });
   return out;
@@ -575,6 +583,25 @@ class JvcProjectorCard extends HTMLElement {
 
   set editMode(v) { this._editMode = !!v; this._applyVisibility(); }
   set preview(v) { this._preview = !!v; this._applyVisibility(); }
+
+  connectedCallback() { this._applyVisibility(); }
+
+  /**
+   * True while the Dashboard is being edited or this card is the editor preview.
+   * HA does not always pass `preview` / `editMode` to the card element, so also
+   * look for the editor's wrappers among the ancestors (crossing shadow roots).
+   */
+  _editing() {
+    if (this._editMode || this._preview) return true;
+    let n = this.parentNode || (this.getRootNode && this.getRootNode().host);
+    for (let i = 0; n && i < 40; i++) {
+      const tag = (n.localName || '').toLowerCase();
+      if (EDITOR_WRAPPERS.includes(tag)) return true;
+      if (n.hasAttribute && (n.hasAttribute('preview') || n.hasAttribute('edit-mode'))) return true;
+      n = n.parentNode || n.host;
+    }
+    return false;
+  }
 
   getCardSize() { return 5; }
   getGridOptions() { return { columns: 12, min_columns: 6, rows: 'auto' }; }
@@ -812,7 +839,7 @@ class JvcProjectorCard extends HTMLElement {
     if (!this._built) return;
     const can = cfg(this._config, 'collapsible') && this._powerState === 'on';
     // Like HA's Conditional card: never hide content while the Dashboard is being edited.
-    const collapsed = can && !!this._collapsed && !this._editMode && !this._preview;
+    const collapsed = can && !!this._collapsed && !this._editing();
     this._root.classList.toggle('is-collapsed', collapsed);
     this._k.hchev.hidden = !can;
   }
@@ -820,8 +847,12 @@ class JvcProjectorCard extends HTMLElement {
   // -- visibility -------------------------------------------------------------
   _applyVisibility() {
     if (!this._built) return;
-    const hide = !cfg(this._config, 'show_when_off') && this._powerState === 'standby' && !this._editMode && !this._preview;
+    const editing = this._editing();
+    const mode = cfg(this._config, 'when_off');
+    const hide = mode === 'hide' && this._powerState === 'standby' && !editing;
     this.style.display = hide ? 'none' : '';
+    // In standby the body collapses to the header unless when_off is 'expanded'; the editor always shows it.
+    if (this._k && this._k.body) this._k.body.hidden = !this._found || (this._standbyNow && mode !== 'expanded' && !editing);
     this._applyCollapse();
   }
 
@@ -882,7 +913,8 @@ class JvcProjectorCard extends HTMLElement {
     K.pwr2.hidden = !sbButton;
     K.standby_inline.hidden = !(standby && sbMode === 'inline');
     K.standby.hidden = !(standby && sbMode === 'below');
-    K.body.hidden = !found || (!isOn && !isDown);
+    this._found = found;
+    this._standbyNow = !isOn && !isDown;
 
     // sections on/off (config) + entity availability
     this.querySelectorAll('[data-sec]').forEach((el) => {
@@ -1371,9 +1403,10 @@ class JvcProjectorCardEditor extends HTMLElement {
       <p class="jvce-hint">The header icon is the power button and shows the power state (warming up, cooling down, error). Standby always needs a press-and-hold.</p>
       <label class="jvce-check"><input type="checkbox" data-key="power_hold_on"${cfg(c, 'power_hold_on') ? ' checked' : ''}>
         Require a hold to turn on too</label>
-      <label class="jvce-check"><input type="checkbox" data-key="show_when_off"${cfg(c, 'show_when_off') ? ' checked' : ''}>
-        Show the card while the projector is in standby (otherwise hide it)</label>
-      ${cfg(c, 'show_when_off') ? `
+      <div class="jvce-row"><label class="lbl">When in standby or off</label>
+        <select data-key="when_off">${WHEN_OFF.map(([v, n]) => `<option value="${v}"${v === cfg(c, 'when_off') ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
+      <p class="jvce-hint">The card editor always shows the card expanded, so every section can be set up.</p>
+      ${cfg(c, 'when_off') !== 'hide' ? `
       <div class="jvce-row"><label class="lbl">Standby message</label>
         <select data-key="standby_text">${STANDBY_TEXT.map(([v, n]) => `<option value="${v}"${v === sbMode ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
       ${sbMode !== 'hidden' ? `
@@ -1427,7 +1460,7 @@ class JvcProjectorCardEditor extends HTMLElement {
     }));
     this.querySelectorAll('[data-key]').forEach((el) => {
       const key = el.dataset.key;
-      const reveals = ['show_when_off', 'collapsible', 'show_dot', 'standby_text', 'power_hold_on'].includes(key)
+      const reveals = ['when_off', 'collapsible', 'show_dot', 'standby_text', 'power_hold_on'].includes(key)
         || Object.values(SECTION_META).some((m) => m.show === key);
       if (el.type === 'checkbox') el.addEventListener('change', () => { this._set(key, el.checked); if (reveals) this._render(); });
       else el.addEventListener('change', () => { this._set(key, el.value.trim()); if (reveals) this._render(); });
@@ -1530,7 +1563,7 @@ class JvcProjectorCardEditor extends HTMLElement {
 // Test hooks (pure helpers; no effect in the browser)
 JvcProjectorCard._test = {
   BUILD_NUMBER, CARD_CSS, EDITOR_CSS, DEFAULTS, ENTITY_KEYS, OPTIONAL_ENTITIES, STYLE_DEFS, ICON_DEFAULTS, MENU_KEYS, DEFAULT_MENU_KEYS,
-  SECTION_IDS, sectionOrder, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
+  SECTION_IDS, sectionOrder, WHEN_OFF, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
   PICTURE_MODES, COLORIMETRY, CONTENT_TYPES, LENS_MEMORIES, HDR_PROCESSING, HDR_LEVEL, isNoSignal,
 };
 

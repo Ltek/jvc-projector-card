@@ -1,5 +1,10 @@
 # Changelog
 
+## v2026.10.15.6
+
+- **When in standby or off** (Card & sections → Power & standby, YAML `when_off`): **Hide the entire card**, **Collapse to the header** (default, as before) or **Keep expanded** — the last shows every section in standby too. Replaces the "Show the card while off" checkbox; `show_when_off: false` from older configs is read as `hide`.
+- **The card editor always shows the card expanded** — in standby, with *Hide* or *Collapse*, and with *Start collapsed* — so every section can be set up. This no longer depends on Home Assistant passing an edit/preview flag to the card.
+
 ## v2026.10.15.5
 
 - **Eye icons instead of checkboxes** for show/hide, per the design guide (same as the Lumagen and StormAudio cards). The **Sections** list is now one row per section — its icon, name, ↑ / ↓, **Open** (start open) and an eye; Remote and Laser carry labelled eyes for their menu shortcuts and Low / Mid / High buttons. The **Buttons** panel (picture modes, dynamic, inputs, lens memories, menu shortcuts) uses an eye per button. Hidden rows are dimmed.
