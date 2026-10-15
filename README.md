@@ -2,7 +2,7 @@
 
 A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
 
-Current build: **v2026.10.15.8** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.15.9** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 
@@ -68,7 +68,7 @@ The integration's **Model** sensor is disabled by default; enable it in **Settin
 
 ## Options
 
-Everything is in the visual editor (Device · Card · Sections · Buttons · Icons · Appearance). YAML keys are only written when they differ from the default.
+Everything is in the visual editor (Card (with the device picker) · Sections · Buttons · Icons · Appearance). YAML keys are only written when they differ from the default.
 
 | Key | Default | Description |
 |---|---|---|
@@ -90,7 +90,7 @@ Everything is in the visual editor (Device · Card · Sections · Buttons · Ico
 | `section_merge` | | Show a section's settings inside another section, e.g. `laser: picture`: the section disappears and its visible settings appear at the end of the target, under its name. Not into a hidden section, and no chains (a section others merge into stays its own). Editor: pencil → **Merge**. |
 | `menu_keys` | `[mpc, gamma, color_temp, lens_control, advanced_menu]` | Menu shortcuts under the remote. Any of `mpc` `gamma` `color_temp` `color_profile` `gamma_settings` `pic_adj` `picture_mode` `cmd` `lens_control` `lens_ap` `anamo` `setting_memory` `mode_1` `mode_2` `mode_3` `input` `3d_format` `advanced_menu`; `[]` = none. |
 | `hide_modes` · `hide_dynamic` · `hide_inputs` · `hide_lens` | | Buttons to hide, by the integration's value (e.g. `[vivid, sdr2]`, `[off]`, `[hdmi2]`, `[memory_4, memory_5]`). The editor's **Buttons** panel lists them, each with an eye to show or hide it. |
-| `laser_step` | `5` | How much − / + change the laser power (1–50). |
+| `laser_step` | `5` | How much − / + change the laser power (1–50). Editor: Sections → pencil on **Laser** → Options. |
 | `show_status` · `show_remote` · `show_menus` · `show_picture` · `show_laser` · `show_laser_presets` · `show_inputs` · `show_info` | `true` | Turn parts off. |
 | `accent_color` · `hdr_color` · `warming_color` · `cooling_color` | theme primary · amber · orange · cyan | Context colors. |
 | `icons:` | | `header`, `remote`, `picture`, `laser`, `source`, `info` — any MDI name; `mdi:` is optional. |

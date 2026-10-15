@@ -1,5 +1,11 @@
 # Changelog
 
+## v2026.10.15.9
+
+- The **Device** picker moved into the **Card** panel (it was a whole panel for one setting).
+- The laser **− / + step** moved from Buttons to the **Laser** section's options (Sections → pencil on Laser).
+- A section's edit panel (pencil) can now carry options of its own.
+
 ## v2026.10.15.8
 
 - **Sections** is its own top-level panel in the editor (it was at the bottom of *Card & sections*, now just **Card**).

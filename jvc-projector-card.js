@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.8
+// Version: v2026.10.15.9
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.8';
+const BUILD_NUMBER = 'v2026.10.15.9';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -1512,11 +1512,23 @@ class JvcProjectorCardEditor extends HTMLElement {
     }
     return `<div class="jvce-sedit" data-sedit-panel="${id}">
       <div class="jvce-row"><label class="lbl">Name</label><input type="text" data-sname="${id}" value="${esc((c.section_names || {})[id] || '')}" placeholder="${esc(defaultSectionName(id))}"></div>
+      ${this._secOptions(id)}
       <div class="jvce-group">Settings</div>
       ${items.length ? `<div class="jvce-blist">${rows}</div>` : '<p class="jvce-hint">This section is a single block; use its eye to show or hide it.</p>'}
       <div class="jvce-group">Merge</div>
       ${merge}
     </div>`;
+  }
+
+  /** Section-specific options shown in its edit panel. */
+  _secOptions(id) {
+    const c = this._config;
+    if (id === 'laser') {
+      return `<div class="jvce-group">Options</div>
+      <p class="jvce-hint">How much − and + change the laser power (Low / Mid / High match the projector's own settings).</p>
+      ${this._slider('laser_step', '− / + step', cfg(c, 'laser_step'), 1, 20, 1, '', (n) => `${n}%`)}`;
+    }
+    return '';
   }
 
   /** Pencil button for a section row. */
@@ -1575,15 +1587,12 @@ class JvcProjectorCardEditor extends HTMLElement {
       <p class="jvce-hint">Remote keys shown as one-tap buttons under the arrows.</p>
       <div class="jvce-blist">${[...MENU_KEYS, ...extra.map((k) => [k, k])].map(([k, n]) => `<div class="jvce-brow${keys.includes(k) ? '' : ' off'}"><span class="jvce-sname">${esc(n)}</span>
         ${eyeToggle(`data-menu="${esc(k)}"`, keys.includes(k), '', n)}</div>`).join('')}</div>`);
-    const laser = this._sub('btn-laser', 'Laser', `
-      <p class="jvce-hint">How much − and + change the laser power (Low / Mid / High match the projector's own settings).</p>
-      ${this._slider('laser_step', 'Step', cfg(c, 'laser_step'), 1, 20, 1, '', (n) => `${n}%`)}`);
     return `<p class="jvce-hint">Use the eye to hide a button from the card. Picture modes come from the projector and change with the content (SDR / HDR10 / HLG…).</p>
       ${group('Picture mode', 'hide_modes')}
       ${group('Dynamic control', 'hide_dynamic')}
       ${group('Input', 'hide_inputs')}
       ${group('Lens memory', 'hide_lens')}
-      ${menus}${laser}`;
+      ${menus}`;
   }
 
   _render() {
@@ -1602,7 +1611,10 @@ class JvcProjectorCardEditor extends HTMLElement {
         </select></div>`;
     const sbMode = cfg(c, 'standby_text');
     const cardBody = `
-      <p class="jvce-hint">Header title, the power button, what the card does while the projector is off, and collapsing.</p>
+      <p class="jvce-hint">The device, the header title, the power button, what the card does while the projector is off, and collapsing.</p>
+      <div class="jvce-group">Device</div>
+      ${deviceBody}
+      <div class="jvce-group">Header</div>
       <div class="jvce-row"><label class="lbl">Title</label><input type="text" data-key="title" value="${esc(cfg(c, 'title'))}"></div>
       <div class="jvce-group">Power & standby</div>
       <p class="jvce-hint">The header icon is the power button and shows the power state (warming up, cooling down, error). Standby always needs a press-and-hold.</p>
@@ -1649,7 +1661,6 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${CONTEXT_COLORS.map(([k, l, d, seed]) => this._colorControl(k, l, d, seed)).join('')}`);
     this.innerHTML = `<style>${EDITOR_CSS}</style>
       <div class="jvce">
-        ${this._panel('device', 'mdi:projector', 'Device', deviceBody)}
         ${this._panel('card', 'mdi:card-text-outline', 'Card', cardBody)}
         ${this._panel('sections', 'mdi:view-agenda-outline', 'Sections', sectionsBody)}
         ${this._panel('buttons', 'mdi:gesture-tap-button', 'Buttons', this._buttonsBody())}
