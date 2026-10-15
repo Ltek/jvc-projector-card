@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.6
+// Version: v2026.10.15.7
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.6';
+const BUILD_NUMBER = 'v2026.10.15.7';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -291,6 +291,76 @@ const HIDE_LISTS = {
   hide_inputs: { entity: 'input', labels: INPUTS },
   hide_lens: { entity: 'lens', labels: LENS_MEMORIES },
 };
+
+// ---------------------------------------------------------------------------
+// Section editing (editor: pencil on a section row): rename, hide single settings, merge.
+// ---------------------------------------------------------------------------
+// Per-section settings the user can hide: [id, label, selector, existing show key?]. A setting with
+// a show key is the card's own option (its eye toggles that key); the rest use hidden_items.
+const SECTION_ITEMS = {
+  status: [['signal', 'Signal box', '[data-item="box-s"]'], ['picture', 'Picture box', '[data-item="box-p"]'],
+    ['laser', 'Laser box', '[data-item="box-x"]'], ['tags', 'Status tags', '[data-k="tags"]']],
+  remote: [['pad', 'Arrows and OK', '.jvc-pad'], ['hint', '"Hold an arrow" hint', '[data-item="remote-hint"]'],
+    ['menus', 'Menu shortcuts', '[data-k="menus"]', 'show_menus']],
+  picture: [['mode', 'Picture mode', '[data-row="mode"]'], ['dynamic', 'Dynamic control', '[data-row="dynamic"]'],
+    ['lens', 'Lens memory', '[data-row="lens"]'], ['anamorphic', 'Anamorphic', '[data-row="anamorphic"]'],
+    ['hdr_proc', 'HDR processing', '[data-row="hdr_proc"]'], ['hdr_level', 'HDR level', '[data-row="hdr_level"]'],
+    ['theater_opt', 'Theater optimizer', '[data-row="theater_opt"]'], ['cmd', 'Motion (CMD)', '[data-row="cmd"]'],
+    ['motion', 'Motion enhance', '[data-row="motion"]'], ['eshift', '8K e-shift', '[data-row="eshift"]'],
+    ['low_latency', 'Low latency', '[data-row="low_latency"]']],
+  laser: [['slider', 'Slider and − / +', '.jvc-laser'], ['presets', 'Low / Mid / High', '[data-k="laser_presets_row"]', 'show_laser_presets']],
+  source: [['input', 'Inputs', '[data-row="input"]']],
+  info: [['details', 'Details list', '[data-k="info"]'], ['eco', 'ECO mode', '[data-row="eco"], [data-k="eco_note"]'],
+    ['link', 'Connection note', '[data-k="link"]'], ['missing', 'Disabled-entities note', '[data-k="missing"]']],
+};
+// Sections other sections can be merged into, and sections that can't be merged anywhere.
+const MERGE_TARGETS = ['status', 'remote', 'picture', 'laser', 'source', 'info'];
+const NOT_MERGEABLE = [];
+
+function defaultSectionName(id) { return (SECTION_META[id] || {}).label || id; }
+
+/** A section's name: the user's, else the default. */
+function secLabel(config, id) {
+  const n = config.section_names && config.section_names[id];
+  return n || defaultSectionName(id);
+}
+
+function sectionShown(config, id) { return !!(cfg(config, (SECTION_META[id] || {}).show || ('show_' + id))); }
+
+/** The section a section is merged into, or '' when it shows as itself (none set, invalid, chained, or either one hidden). */
+function mergeTarget(config, id) {
+  const m = config.section_merge || {};
+  const t = m[id];
+  if (!t || t === id || !MERGE_TARGETS.includes(t) || NOT_MERGEABLE.includes(id) || m[t]) return '';
+  if (Object.keys(m).some((k) => m[k] === id)) return '';
+  if (!sectionShown(config, id) || !sectionShown(config, t)) return '';
+  return t;
+}
+
+function normalizeSectionEdits(c, out) {
+  const known = (id) => SECTION_ITEMS[id] !== undefined;
+  if (c.section_names && typeof c.section_names === 'object') {
+    const n = {};
+    Object.keys(c.section_names).forEach((id) => {
+      const v = String(c.section_names[id] == null ? '' : c.section_names[id]).trim();
+      if (known(id) && v && v !== defaultSectionName(id)) n[id] = v;
+    });
+    if (Object.keys(n).length) out.section_names = n;
+  }
+  const ok = new Set(Object.entries(SECTION_ITEMS).flatMap(([sec, items]) => items.filter((i) => !i[3]).map((i) => `${sec}.${i[0]}`)));
+  const hidden = [];
+  (Array.isArray(c.hidden_items) ? c.hidden_items : []).forEach((x) => { const v = String(x).trim(); if (ok.has(v) && !hidden.includes(v)) hidden.push(v); });
+  if (hidden.length) out.hidden_items = hidden;
+  if (c.section_merge && typeof c.section_merge === 'object') {
+    const m = {};
+    Object.keys(c.section_merge).forEach((id) => {
+      const t = String(c.section_merge[id] == null ? '' : c.section_merge[id]).trim();
+      if (known(id) && !NOT_MERGEABLE.includes(id) && MERGE_TARGETS.includes(t) && t !== id) m[id] = t;
+    });
+    if (Object.keys(m).length) out.section_merge = m;
+  }
+}
+
 // What the card does while the device is in standby / off.
 const WHEN_OFF = [['hide', 'Hide the entire card'], ['collapse', 'Collapse to the header'], ['expanded', 'Keep expanded']];
 // Ancestors that mean "the Dashboard is being edited / this is the editor preview".
@@ -365,8 +435,9 @@ function normalizeConfig(raw) {
     const order = sectionOrder(c);
     if (JSON.stringify(order) !== JSON.stringify(SECTION_IDS)) out.section_order = order;
   }
-  const known = ['type', 'icons', 'styles', 'menu_keys', 'open_sections', 'section_order'];
+  const known = ['type', 'icons', 'styles', 'menu_keys', 'open_sections', 'section_order', 'section_names', 'hidden_items', 'section_merge'];
   if (out.when_off !== undefined && !WHEN_OFF.some(([v]) => v === out.when_off)) delete out.when_off;
+  normalizeSectionEdits(c, out);
   Object.keys(c).forEach((k) => {
     if (k === 'show_when_off') return; // replaced by when_off
     if (!(k in out) && !(k in DEFAULTS) && !(k in HIDE_LISTS) && !known.includes(k)) out[k] = c[k];
@@ -478,7 +549,12 @@ const CARD_CSS = `
   --mdc-icon-size: 20px; }
 .jvc-pwr2:hover { background: color-mix(in srgb, var(--jvc-ctx) 20%, transparent); }
 .jvc-standby { padding: 2px 0 2px var(--jvc-standby-indent, 46px); font-size: var(--jvc-secondary-size, 13px); color: var(--jvc-secondary-color, var(--secondary-text-color)); }
-.jvc-chain { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); gap: 6px; margin-top: 10px; }
+.jvc-chain { display: flex; gap: 6px; margin-top: 10px; }
+.jvc-chain > .jvc-box { flex: 1 1 0; }
+.jvc-uhide, .jvc-away { display: none !important; }
+.jvc-merged { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--jvc-divider-color, rgba(127,127,127,0.2)); }
+.jvc-merged-h { margin-bottom: 4px; font-size: var(--jvc-subtitle-size, 10px); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
 .jvc-box { min-width: 0; padding: 8px 6px; border-radius: 10px; text-align: center; background: var(--jvc-box); }
 .jvc-box-h { font-size: var(--jvc-subtitle-size, 10px); letter-spacing: .08em; text-transform: uppercase; color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
 .jvc-box-t { font-size: var(--jvc-text-size, 14px); font-weight: 600; color: var(--jvc-text-color, var(--primary-text-color));
@@ -617,7 +693,7 @@ class JvcProjectorCard extends HTMLElement {
     if (!this._open) this._open = new Set(c.open_sections || []);
     const fold = (sec, label, body) => `
       <details class="jvc-fold" data-sec="${sec}"${this._open.has(sec) ? ' open' : ''}>
-        <summary><ha-icon class="jvc-sec-i" icon="${esc(iconFor(c, sec))}"></ha-icon><span>${label}</span>
+        <summary><ha-icon class="jvc-sec-i" icon="${esc(iconFor(c, sec))}"></ha-icon><span>${c.section_names && c.section_names[sec] ? esc(c.section_names[sec]) : label}</span>
           <span class="jvc-peek" data-peek="${sec}"></span><ha-icon class="jvc-chev" icon="mdi:chevron-right"></ha-icon></summary>
         ${body}
       </details>`;
@@ -629,7 +705,7 @@ class JvcProjectorCard extends HTMLElement {
     const dot = (where) => (dotAt === where ? `<span class="jvc-dot at-${where}" data-k="dot" data-pos="${where}"></span>` : '');
     const menus = menuKeys(c).map((k) => `<button class="jvc-chip" data-tap="remote" data-cmd="${esc(k)}">${esc(MENU_LABELS[k] || k)}</button>`).join('');
     if (this._collapsed === undefined) this._collapsed = cfg(c, 'collapsible') && cfg(c, 'start_collapsed');
-    const box = (id, title) => `<div class="jvc-box"><div class="jvc-box-h">${title}</div><div class="jvc-box-t" data-k="${id}_t"></div>`
+    const box = (id, title) => `<div class="jvc-box" data-item="box-${id}"><div class="jvc-box-h">${title}</div><div class="jvc-box-t" data-k="${id}_t"></div>`
       + `${id === 'x' ? '<div class="jvc-mini"><span data-k="x_bar"></span></div>' : `<div class="jvc-box-s" data-k="${id}_1"></div>`}<div class="jvc-box-s" data-k="${id}_2"></div></div>`;
     const arrow = '<ha-icon class="jvc-arrow" icon="mdi:chevron-right"></ha-icon>';
     // Each section's markup; rendered in the configured order.
@@ -644,7 +720,7 @@ class JvcProjectorCard extends HTMLElement {
               ${key('left', icon('chevron-left'), '', 1)}${key('ok', 'OK', 'ok')}${key('right', icon('chevron-right'), '', 1)}
               ${key('menu', 'Menu', 'sm')}${key('down', icon('chevron-down'), '', 1)}${key('back', 'Back', 'sm')}
             </div>
-            <div class="jvc-hint">Hold an arrow to repeat it 5×</div>
+            <div class="jvc-hint" data-item="remote-hint">Hold an arrow to repeat it 5×</div>
             <div class="jvc-opts jvc-menus" data-k="menus"${cfg(c, 'show_menus') && menus ? '' : ' hidden'}>${menus}</div></div>`),
       picture: fold('picture', 'Picture', `
             <div class="jvc-ctl">
@@ -702,6 +778,7 @@ class JvcProjectorCard extends HTMLElement {
     this._root = this.querySelector('.jvc');
     this._k = {};
     this.querySelectorAll('[data-k]').forEach((el) => { this._k[el.dataset.k] = el; });
+    this._applyLayout();
     this.querySelectorAll('details.jvc-fold').forEach((d) => d.addEventListener('toggle', () => {
       if (d.open) this._open.add(d.dataset.sec); else this._open.delete(d.dataset.sec);
     }));
@@ -835,6 +912,47 @@ class JvcProjectorCard extends HTMLElement {
     }
   }
 
+  /** Merge sections into others (section_merge): move their content to the end of the target, under their name. */
+  _applyLayout() {
+    const c = this._config;
+    sectionOrder(c).forEach((id) => {
+      const target = mergeTarget(c, id);
+      if (!target) return;
+      const from = this.querySelector(`[data-sec="${id}"]`);
+      const to = this.querySelector(`[data-sec="${target}"]`);
+      if (!from || !to) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'jvc-merged';
+      wrap.dataset.from = id;
+      wrap.innerHTML = `<div class="jvc-merged-h">${esc(secLabel(c, id))}</div>`;
+      [...from.children].filter((el) => el.tagName !== 'SUMMARY').forEach((el) => wrap.appendChild(el));
+      to.appendChild(wrap);
+      from.classList.add('jvc-away');
+    });
+  }
+
+  /** Hide the settings the user hid (hidden_items); a status arrow shows only between two visible boxes. */
+  _applyItems() {
+    const c = this._config;
+    const hidden = new Set(c.hidden_items || []);
+    Object.entries(SECTION_ITEMS).forEach(([sec, items]) => items.forEach(([id, , sel, key]) => {
+      if (key || !sel) return;
+      const off = hidden.has(`${sec}.${id}`);
+      this.querySelectorAll(sel).forEach((el) => el.classList.toggle('jvc-uhide', off));
+    }));
+    this.querySelectorAll('.jvc-chain').forEach((chain) => {
+      const kids = [...chain.children];
+      const boxes = kids.filter((el) => el.classList.contains('jvc-box'));
+      const shown = boxes.filter((el) => !el.classList.contains('jvc-uhide'));
+      kids.forEach((el) => { if (el.classList.contains('jvc-arrow')) el.classList.add('jvc-uhide'); });
+      shown.slice(1).forEach((b) => {
+        const prev = kids[kids.indexOf(b) - 1];
+        if (prev && prev.classList.contains('jvc-arrow')) prev.classList.remove('jvc-uhide');
+      });
+      chain.classList.toggle('jvc-uhide', boxes.length > 0 && shown.length === 0);
+    });
+  }
+
   _applyCollapse() {
     if (!this._built) return;
     const can = cfg(this._config, 'collapsible') && this._powerState === 'on';
@@ -924,7 +1042,7 @@ class JvcProjectorCard extends HTMLElement {
       if (sec === 'picture') show = show && !!(E.mode || E.dynamic || E.lens || E.anamorphic || E.low_latency || E.cmd || E.motion || E.eshift || E.theater_opt);
       if (sec === 'laser') show = show && !!E.laser;
       if (sec === 'source') show = show && !!E.input;
-      el.hidden = !show;
+      el.hidden = !show && !el.querySelector(':scope > .jvc-merged');
     });
 
     // status boxes: signal › picture › laser
@@ -1030,6 +1148,7 @@ class JvcProjectorCard extends HTMLElement {
     set('missing', found && missing.length ? `Disabled: ${missing.join(' · ')} — enable in Settings → Devices & services → JVC Projector → device → Entities.` : '');
     K.missing.hidden = !found || !missing.length;
 
+    this._applyItems();
     this._applyVisibility();
   }
 
@@ -1222,6 +1341,10 @@ const EDITOR_CSS = `
         .jvce-brow { display: flex; align-items: center; gap: var(--ltek-sp-2); padding: var(--ltek-sp-1); border-top: 1px solid var(--ltek-c-border-soft); }
         .jvce-brow:first-child { border-top: none; }
         .jvce-brow.off .jvce-sname { color: var(--ltek-c-muted); }
+        .jvce-act.on { color: var(--ltek-c-accent); }
+        .jvce-stag { flex: 0 0 auto; font-size: var(--ltek-fs-small); color: var(--ltek-c-muted); white-space: nowrap; }
+        .jvce-sedit { margin: calc(-1 * var(--ltek-sp-1)) 0 var(--ltek-sp-1) 28px; padding: var(--ltek-sp-2) var(--ltek-sp-3);
+          border: 1px solid var(--ltek-c-accent); border-radius: var(--ltek-r-card); background: var(--ltek-c-surface); }
         .jvce-preset { padding: 3px 8px; border: 1px solid var(--ltek-c-border); border-radius: var(--ltek-r-ctrl); background: transparent;
           color: var(--ltek-c-text); font-size: var(--ltek-fs-small); cursor: pointer; }
         .jvce-preset:hover { border-color: var(--ltek-c-accent); background: var(--ltek-c-accent-fade-soft); }
@@ -1325,6 +1448,49 @@ class JvcProjectorCardEditor extends HTMLElement {
   }
 
   /** The ordered section list (design system "section rows"): icon, name, sub-option eyes, ↑ / ↓, start open, eye. */
+  /** The inline panel under a section row (pencil): name, its settings' eyes, merge. */
+  _secEditPanel(id) {
+    const c = this._config;
+    const items = SECTION_ITEMS[id] || [];
+    const hidden = new Set(c.hidden_items || []);
+    const m = c.section_merge || {};
+    const isTarget = Object.keys(m).some((k) => k !== id && m[k] === id);
+    const rows = items.map(([iid, label, , key]) => {
+      const on = key ? !!cfg(c, key) : !hidden.has(`${id}.${iid}`);
+      const attr = key ? `data-eye="${key}"` : `data-item-eye="${id}.${iid}"`;
+      return `<div class="jvce-brow${on ? '' : ' off'}"><span class="jvce-sname">${esc(label)}</span>${eyeToggle(attr, on, '', label)}</div>`;
+    }).join('');
+    const targets = MERGE_TARGETS.filter((t) => t !== id && !m[t]);
+    const cur = m[id] || '';
+    let merge;
+    if (NOT_MERGEABLE.includes(id)) merge = '<p class="jvce-hint">This section can\'t be shown inside another one.</p>';
+    else if (isTarget) merge = '<p class="jvce-hint">Other sections are shown inside this one, so it stays a section of its own.</p>';
+    else {
+      merge = `<div class="jvce-row"><label class="lbl">Show its settings in</label>
+        <select data-smerge="${id}"><option value="">— its own section —</option>${targets.map((t) => `<option value="${t}"${t === cur ? ' selected' : ''}>${esc(secLabel(c, t))}</option>`).join('')}</select></div>
+        <p class="jvce-hint">The section itself disappears from the card; its visible settings appear at the end of the chosen section, under this section's name.${cur && !mergeTarget(c, id) ? ' <b>Not applied now:</b> one of the two sections is hidden.' : ''}</p>`;
+    }
+    return `<div class="jvce-sedit" data-sedit-panel="${id}">
+      <div class="jvce-row"><label class="lbl">Name</label><input type="text" data-sname="${id}" value="${esc((c.section_names || {})[id] || '')}" placeholder="${esc(defaultSectionName(id))}"></div>
+      <div class="jvce-group">Settings</div>
+      ${items.length ? `<div class="jvce-blist">${rows}</div>` : '<p class="jvce-hint">This section is a single block; use its eye to show or hide it.</p>'}
+      <div class="jvce-group">Merge</div>
+      ${merge}
+    </div>`;
+  }
+
+  /** Pencil button for a section row. */
+  _secEditBtn(id) {
+    const open = this._sedit === id;
+    return `<button class="jvce-act${open ? ' on' : ''}" data-sedit="${id}" aria-expanded="${open}" title="${open ? 'Close' : 'Edit section'}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>`;
+  }
+
+  /** Tag on a merged section's row: where its settings show. */
+  _secMergeTag(id) {
+    const t = mergeTarget(this._config, id);
+    return t ? `<span class="jvce-stag" title="Shown inside ${esc(secLabel(this._config, t))}">→ ${esc(secLabel(this._config, t))}</span>` : '';
+  }
+
   _sectionsBody() {
     const c = this._config;
     const order = sectionOrder(c);
@@ -1335,15 +1501,14 @@ class JvcProjectorCardEditor extends HTMLElement {
       const m = SECTION_META[id];
       const shown = cfg(c, m.show);
       const icon = id === 'status' ? 'mdi:transit-connection-variant' : iconFor(c, id);
-      const subs = (m.subs || []).map(([k, n]) => eyeToggle(`data-eye="${k}"${shown ? '' : ' disabled'}`, cfg(c, k), n)).join('');
       return `<div class="jvce-srow${shown ? '' : ' off'}" data-section="${id}">
         <ha-icon class="jvce-sicon" icon="${esc(icon)}"></ha-icon>
-        <span class="jvce-sname" title="${esc(m.hint)}">${esc(m.label)}</span>
-        ${subs ? `<span class="jvce-sctl">${subs}</span>` : ''}
+        <span class="jvce-sname" title="${esc(m.hint)}">${esc(secLabel(c, id))}</span>${this._secMergeTag(id)}
         ${btn(id, -1, i === 0)}${btn(id, 1, i === order.length - 1)}
         ${id === 'status' ? '<span class="jvce-open-gap"></span>' : openToggle(id, openSecs.includes(id), !shown)}
         ${eyeToggle(`data-eye="${m.show}"`, shown, '', m.label)}
-      </div>`;
+        ${this._secEditBtn(id)}
+      </div>${this._sedit === id ? this._secEditPanel(id) : ''}`;
     }).join('')}</div>
     ${c.section_order ? '<div class="jvce-row"><button class="jvce-preset" data-order-reset>Reset to default order</button></div>' : ''}`;
   }
@@ -1482,6 +1647,34 @@ class JvcProjectorCardEditor extends HTMLElement {
         this._render();
       });
     });
+    this.querySelectorAll('[data-sedit]').forEach((b) => b.addEventListener('click', () => {
+      this._sedit = this._sedit === b.dataset.sedit ? '' : b.dataset.sedit;
+      this._render();
+    }));
+    this.querySelectorAll('[data-sname]').forEach((el) => el.addEventListener('change', () => {
+      const names = { ...(this._config.section_names || {}) };
+      const v = el.value.trim();
+      if (v) names[el.dataset.sname] = v; else delete names[el.dataset.sname];
+      this._config.section_names = names;
+      this._emit();
+      this._render();
+    }));
+    this.querySelectorAll('[data-item-eye]').forEach((b) => b.addEventListener('click', () => {
+      const id = b.dataset.itemEye;
+      const was = (this._config.hidden_items || []).includes(id);
+      const list = (this._config.hidden_items || []).filter((x) => x !== id);
+      if (!was) list.push(id);
+      this._config.hidden_items = list;
+      this._emit();
+      this._render();
+    }));
+    this.querySelectorAll('[data-smerge]').forEach((el) => el.addEventListener('change', () => {
+      const m = { ...(this._config.section_merge || {}) };
+      if (el.value) m[el.dataset.smerge] = el.value; else delete m[el.dataset.smerge];
+      this._config.section_merge = m;
+      this._emit();
+      this._render();
+    }));
     this.querySelectorAll('[data-eye]').forEach((b) => b.addEventListener('click', () => {
       this._set(b.dataset.eye, !cfg(this._config, b.dataset.eye));
       this._render();
@@ -1563,7 +1756,7 @@ class JvcProjectorCardEditor extends HTMLElement {
 // Test hooks (pure helpers; no effect in the browser)
 JvcProjectorCard._test = {
   BUILD_NUMBER, CARD_CSS, EDITOR_CSS, DEFAULTS, ENTITY_KEYS, OPTIONAL_ENTITIES, STYLE_DEFS, ICON_DEFAULTS, MENU_KEYS, DEFAULT_MENU_KEYS,
-  SECTION_IDS, sectionOrder, WHEN_OFF, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
+  SECTION_IDS, sectionOrder, WHEN_OFF, SECTION_ITEMS, MERGE_TARGETS, mergeTarget, secLabel, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
   PICTURE_MODES, COLORIMETRY, CONTENT_TYPES, LENS_MEMORIES, HDR_PROCESSING, HDR_LEVEL, isNoSignal,
 };
 
