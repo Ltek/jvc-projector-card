@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.4
+// Version: v2026.10.15.5
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.4';
+const BUILD_NUMBER = 'v2026.10.15.5';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -1049,6 +1049,18 @@ const CONTEXT_COLORS = [
   ['cooling_color', 'Cooling down', 'Cyan', '#00bcd4'],
 ];
 
+/** Eye show/hide toggle (design system: show/hide is an eye icon, never a checkbox). */
+function eyeToggle(attrs, on, label = '', what = '') {
+  return `<button class="jvce-act jvce-eye${on ? '' : ' off'}${label ? ' lbl' : ''}" ${attrs} aria-pressed="${on}"
+    title="${on ? 'Hide' : 'Show'} ${esc(what || label || 'section')}"><ha-icon icon="${on ? 'mdi:eye-outline' : 'mdi:eye-off-outline'}"></ha-icon>${label ? `<span>${esc(label)}</span>` : ''}</button>`;
+}
+
+/** Start-open toggle for a collapsible section. */
+function openToggle(id, on, disabled) {
+  return `<button class="jvce-act jvce-eye lbl${on ? '' : ' off'}" data-open="${id}" aria-pressed="${on}"${disabled ? ' disabled' : ''}
+    title="${on ? 'Starts open — tap to start collapsed' : 'Starts collapsed — tap to start open'}"><ha-icon icon="${on ? 'mdi:unfold-more-horizontal' : 'mdi:unfold-less-horizontal'}"></ha-icon><span>Open</span></button>`;
+}
+
 function colorMode(cur, allowTransparent = false) {
   cur = cur == null ? '' : String(cur);
   if (cur === '') return 'default';
@@ -1157,20 +1169,27 @@ const EDITOR_CSS = `
         .jvce-check { display: flex; align-items: center; gap: var(--ltek-sp-2); padding: var(--ltek-sp-1) 0; color: var(--ltek-c-label);
           font-size: var(--ltek-fs-body); cursor: pointer; }
         .jvce-check input { accent-color: var(--ltek-c-accent); }
-        .jvce-order { display: flex; flex-direction: column; gap: var(--ltek-sp-1); margin-bottom: var(--ltek-sp-3); }
-        .jvce-sec-row { border: 1px solid var(--ltek-c-border-soft); border-radius: var(--ltek-r-md); background: var(--ltek-c-surface-raised);
-          padding: var(--ltek-sp-1) var(--ltek-sp-3); }
-        .jvce-sec-row.off .jvce-sec-name { color: var(--ltek-c-muted); }
-        .jvce-sec-line { display: flex; align-items: center; gap: var(--ltek-sp-3); }
-        .jvce-moves { display: flex; flex-direction: column; flex: none; }
-        .jvce-move { border: none; background: none; padding: 0; line-height: 0; color: var(--ltek-c-icon); cursor: pointer; }
-        .jvce-move:hover:not([disabled]) { color: var(--ltek-c-icon-hover); }
-        .jvce-move[disabled] { opacity: .25; cursor: default; }
-        .jvce-move ha-icon { --mdc-icon-size: var(--ltek-icon-sm); }
-        .jvce-sec-name { flex: 1 1 auto; min-width: 0; }
-        .jvce-sec-name small { color: var(--ltek-c-muted); font-size: var(--ltek-fs-small); }
-        .jvce-open { flex: none; white-space: nowrap; }
-        .jvce-sub-opt { padding-left: 32px; }
+        .jvce-slist { display: flex; flex-direction: column; gap: var(--ltek-sp-2); margin-bottom: var(--ltek-sp-3); }
+        .jvce-srow { display: flex; align-items: center; gap: var(--ltek-sp-2); padding: 6px 8px; border-radius: var(--ltek-r-card);
+          background: var(--ltek-c-surface-raised); border: 1px solid var(--ltek-c-border-soft); }
+        .jvce-srow.off .jvce-sname, .jvce-srow.off .jvce-sicon { opacity: .45; }
+        .jvce-sicon { flex: 0 0 auto; color: var(--ltek-c-accent); --mdc-icon-size: 20px; }
+        .jvce-sname { flex: 1 1 auto; min-width: 0; color: var(--ltek-c-text); font-size: var(--ltek-fs-label); font-weight: var(--ltek-fw-normal);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .jvce-sctl { display: flex; gap: var(--ltek-sp-3); flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+        .jvce-open-gap { flex: 0 0 52px; }
+        .jvce-act { border: none; background: none; padding: 0; color: var(--ltek-c-icon); cursor: pointer; display: flex; }
+        .jvce-act:hover:not([disabled]) { color: var(--ltek-c-icon-hover); }
+        .jvce-act[disabled] { opacity: .25; cursor: default; }
+        .jvce-act ha-icon { --mdc-icon-size: var(--ltek-icon-sm); }
+        .jvce-eye.off { color: var(--ltek-c-muted); }
+        .jvce-eye.lbl { gap: var(--ltek-sp-1); align-items: center; font-size: var(--ltek-fs-small); color: var(--ltek-c-label); }
+        .jvce-eye.lbl.off { color: var(--ltek-c-muted); }
+        .jvce-eye.lbl.off span { text-decoration: line-through; }
+        .jvce-blist { display: flex; flex-direction: column; }
+        .jvce-brow { display: flex; align-items: center; gap: var(--ltek-sp-2); padding: var(--ltek-sp-1); border-top: 1px solid var(--ltek-c-border-soft); }
+        .jvce-brow:first-child { border-top: none; }
+        .jvce-brow.off .jvce-sname { color: var(--ltek-c-muted); }
         .jvce-preset { padding: 3px 8px; border: 1px solid var(--ltek-c-border); border-radius: var(--ltek-r-ctrl); background: transparent;
           color: var(--ltek-c-text); font-size: var(--ltek-fs-small); cursor: pointer; }
         .jvce-preset:hover { border-color: var(--ltek-c-accent); background: var(--ltek-c-accent-fade-soft); }
@@ -1273,26 +1292,28 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${isSet && scope ? `<button class="jvce-reset" data-reset="${key}" data-scope="${scope}" title="Back to default"><ha-icon icon="mdi:restore"></ha-icon></button>` : ''}</div>`;
   }
 
-  /** The ordered section list: move up / down, show, start open, and sub-options. */
+  /** The ordered section list (design system "section rows"): icon, name, sub-option eyes, ↑ / ↓, start open, eye. */
   _sectionsBody() {
     const c = this._config;
     const order = sectionOrder(c);
     const openSecs = c.open_sections || [];
-    const btn = (id, dir, disabled) => `<button class="jvce-move" data-move="${id}" data-dir="${dir}"${disabled ? ' disabled' : ''}
-      aria-label="Move ${esc(SECTION_META[id].label)} ${dir < 0 ? 'up' : 'down'}" title="Move ${dir < 0 ? 'up' : 'down'}"><ha-icon icon="mdi:chevron-${dir < 0 ? 'up' : 'down'}"></ha-icon></button>`;
-    return `<div class="jvce-order">${order.map((id, i) => {
+    const btn = (id, dir, disabled) => `<button class="jvce-act" data-move="${id}" data-dir="${dir}"${disabled ? ' disabled' : ''}
+      aria-label="Move ${esc(SECTION_META[id].label)} ${dir < 0 ? 'up' : 'down'}" title="Move ${dir < 0 ? 'up' : 'down'}"><ha-icon icon="mdi:arrow-${dir < 0 ? 'up' : 'down'}"></ha-icon></button>`;
+    return `<div class="jvce-slist">${order.map((id, i) => {
       const m = SECTION_META[id];
       const shown = cfg(c, m.show);
-      const subs = (m.subs || []).map(([k, n]) => `<label class="jvce-check jvce-sub-opt"><input type="checkbox" data-key="${k}"${cfg(c, k) ? ' checked' : ''}${shown ? '' : ' disabled'}>${n}</label>`).join('');
-      return `<div class="jvce-sec-row${shown ? '' : ' off'}" data-section="${id}">
-        <div class="jvce-sec-line">
-          <span class="jvce-moves">${btn(id, -1, i === 0)}${btn(id, 1, i === order.length - 1)}</span>
-          <label class="jvce-check jvce-sec-name"><input type="checkbox" data-key="${m.show}"${shown ? ' checked' : ''}><span><b>${esc(m.label)}</b> <small>${esc(m.hint)}</small></span></label>
-          ${id === 'status' ? '' : `<label class="jvce-check jvce-open"><input type="checkbox" data-open="${id}"${openSecs.includes(id) ? ' checked' : ''}${shown ? '' : ' disabled'}>Start open</label>`}
-        </div>${subs}
+      const icon = id === 'status' ? 'mdi:transit-connection-variant' : iconFor(c, id);
+      const subs = (m.subs || []).map(([k, n]) => eyeToggle(`data-eye="${k}"${shown ? '' : ' disabled'}`, cfg(c, k), n)).join('');
+      return `<div class="jvce-srow${shown ? '' : ' off'}" data-section="${id}">
+        <ha-icon class="jvce-sicon" icon="${esc(icon)}"></ha-icon>
+        <span class="jvce-sname" title="${esc(m.hint)}">${esc(m.label)}</span>
+        ${subs ? `<span class="jvce-sctl">${subs}</span>` : ''}
+        ${btn(id, -1, i === 0)}${btn(id, 1, i === order.length - 1)}
+        ${id === 'status' ? '<span class="jvce-open-gap"></span>' : openToggle(id, openSecs.includes(id), !shown)}
+        ${eyeToggle(`data-eye="${m.show}"`, shown, '', m.label)}
       </div>`;
     }).join('')}</div>
-    ${c.section_order ? '<button class="jvce-preset" data-order-reset>Default order</button>' : ''}`;
+    ${c.section_order ? '<div class="jvce-row"><button class="jvce-preset" data-order-reset>Reset to default order</button></div>' : ''}`;
   }
 
   _buttonsBody() {
@@ -1306,7 +1327,8 @@ class JvcProjectorCardEditor extends HTMLElement {
       const items = strList([...opts, ...(c[key] || [])]);
       const hidden = new Set(c[key] || []);
       const body = items.length
-        ? `<div class="jvce-checks">${items.map((o) => `<label class="jvce-check"><input type="checkbox" data-hide="${key}" data-hval="${esc(o)}"${hidden.has(o) ? '' : ' checked'}>${esc(pretty(def.labels, o))}</label>`).join('')}</div>`
+        ? `<div class="jvce-blist">${items.map((o) => `<div class="jvce-brow${hidden.has(o) ? ' off' : ''}"><span class="jvce-sname">${esc(pretty(def.labels, o))}</span>
+            ${eyeToggle(`data-hide="${key}" data-hval="${esc(o)}"`, !hidden.has(o), '', pretty(def.labels, o))}</div>`).join('')}</div>`
         : '<p class="jvce-hint">Not available — the entity is missing or the projector is off.</p>';
       return this._sub(`btn-${key}`, title, body);
     };
@@ -1314,11 +1336,12 @@ class JvcProjectorCardEditor extends HTMLElement {
     const extra = keys.filter((k) => !MENU_LABELS[k]);
     const menus = this._sub('btn-menus', 'Menu shortcuts (Remote section)', `
       <p class="jvce-hint">Remote keys shown as one-tap buttons under the arrows.</p>
-      <div class="jvce-checks">${[...MENU_KEYS, ...extra.map((k) => [k, k])].map(([k, n]) => `<label class="jvce-check"><input type="checkbox" data-menu="${esc(k)}"${keys.includes(k) ? ' checked' : ''}>${esc(n)}</label>`).join('')}</div>`);
+      <div class="jvce-blist">${[...MENU_KEYS, ...extra.map((k) => [k, k])].map(([k, n]) => `<div class="jvce-brow${keys.includes(k) ? '' : ' off'}"><span class="jvce-sname">${esc(n)}</span>
+        ${eyeToggle(`data-menu="${esc(k)}"`, keys.includes(k), '', n)}</div>`).join('')}</div>`);
     const laser = this._sub('btn-laser', 'Laser', `
       <p class="jvce-hint">How much − and + change the laser power (Low / Mid / High match the projector's own settings).</p>
       ${this._slider('laser_step', 'Step', cfg(c, 'laser_step'), 1, 20, 1, '', (n) => `${n}%`)}`);
-    return `<p class="jvce-hint">Untick a button to hide it from the card. Picture modes come from the projector and change with the content (SDR / HDR10 / HLG…).</p>
+    return `<p class="jvce-hint">Use the eye to hide a button from the card. Picture modes come from the projector and change with the content (SDR / HDR10 / HLG…).</p>
       ${group('Picture mode', 'hide_modes')}
       ${group('Dynamic control', 'hide_dynamic')}
       ${group('Input', 'hide_inputs')}
@@ -1369,7 +1392,7 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${cfg(c, 'collapsible') ? `<label class="jvce-check"><input type="checkbox" data-key="start_collapsed"${cfg(c, 'start_collapsed') ? ' checked' : ''}>
         Start collapsed</label>` : ''}
       <div class="jvce-group">Sections</div>
-      <p class="jvce-hint">The order of the sections on the card (use the arrows), whether each is shown, and which start open. Every control is in a collapsed section so nothing changes by accident.</p>
+      <p class="jvce-hint">The order of the sections on the card (↑ / ↓), which start open, and the eye to show or hide each one. Every control is in a collapsed section so nothing changes by accident.</p>
       ${this._sectionsBody()}`;
     const iconBody = `
       <p class="jvce-hint">Any Material Design icon — type just the name (e.g. <b>projector-screen</b>); "mdi:" is added for you. Leave empty for the default.</p>
@@ -1426,22 +1449,29 @@ class JvcProjectorCardEditor extends HTMLElement {
         this._render();
       });
     });
-    this.querySelectorAll('[data-hide]').forEach((el) => el.addEventListener('change', () => {
+    this.querySelectorAll('[data-eye]').forEach((b) => b.addEventListener('click', () => {
+      this._set(b.dataset.eye, !cfg(this._config, b.dataset.eye));
+      this._render();
+    }));
+    this.querySelectorAll('[data-hide]').forEach((el) => el.addEventListener('click', () => {
       const key = el.dataset.hide;
       const val = el.dataset.hval;
+      const was = (this._config[key] || []).includes(val);
       const list = (this._config[key] || []).filter((x) => x !== val);
-      if (!el.checked) list.push(val);
+      if (!was) list.push(val);
       if (list.length) this._config[key] = list; else delete this._config[key];
       this._emit();
+      this._render();
     }));
-    this.querySelectorAll('[data-menu]').forEach((el) => el.addEventListener('change', () => {
+    this.querySelectorAll('[data-menu]').forEach((el) => el.addEventListener('click', () => {
       const cur = menuKeys(this._config);
       const known = MENU_KEYS.map(([k]) => k);
       const picked = new Set(cur.filter((k) => k !== el.dataset.menu));
-      if (el.checked) picked.add(el.dataset.menu);
+      if (!cur.includes(el.dataset.menu)) picked.add(el.dataset.menu);
       // Card order = the editor's order; keys typed in YAML that aren't listed stay at the end.
       this._config.menu_keys = [...known.filter((k) => picked.has(k)), ...cur.filter((k) => !known.includes(k) && picked.has(k))];
       this._emit();
+      this._render();
     }));
     this.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => {
       const order = sectionOrder(this._config);
@@ -1458,11 +1488,13 @@ class JvcProjectorCardEditor extends HTMLElement {
     }));
     const reset = this.querySelector('[data-order-reset]');
     if (reset) reset.addEventListener('click', () => { delete this._config.section_order; this._emit(); this._render(); });
-    this.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('change', () => {
+    this.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', () => {
+      const was = (this._config.open_sections || []).includes(el.dataset.open);
       const list = (this._config.open_sections || []).filter((s) => s !== el.dataset.open);
-      if (el.checked) list.push(el.dataset.open);
+      if (!was) list.push(el.dataset.open);
       if (list.length) this._config.open_sections = list; else delete this._config.open_sections;
       this._emit();
+      this._render();
     }));
     this.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => {
       this._set(b.dataset.reset, '', b.dataset.scope);

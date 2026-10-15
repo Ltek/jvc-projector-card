@@ -1,5 +1,9 @@
 # Changelog
 
+## v2026.10.15.5
+
+- **Eye icons instead of checkboxes** for show/hide, per the design guide (same as the Lumagen and StormAudio cards). The **Sections** list is now one row per section — its icon, name, ↑ / ↓, **Open** (start open) and an eye; Remote and Laser carry labelled eyes for their menu shortcuts and Low / Mid / High buttons. The **Buttons** panel (picture modes, dynamic, inputs, lens memories, menu shortcuts) uses an eye per button. Hidden rows are dimmed.
+
 ## v2026.10.15.4
 
 - **Reorder the sections.** The editor's **Sections** list (Card & sections) now shows every section in card order, with ↑ / ↓ arrows to move it, its Show checkbox, its **Start open** checkbox and its sub-options (menu shortcuts under Remote, Low / Mid / High under Laser). Status can move too. A **Default order** button puts them back. YAML: `section_order: [remote, status, …]` — only written when it differs from the default; sections you leave out follow in the default order.
