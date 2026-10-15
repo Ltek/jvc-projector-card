@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.14.3
+// Version: v2026.10.15.4
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.14.3';
+const BUILD_NUMBER = 'v2026.10.15.4';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -198,18 +198,25 @@ const DEFAULTS = {
   warming_color: '',
   cooling_color: '',
 };
-const SECTIONS = [
-  ['show_status', 'Status (signal → picture → laser) and tags'],
-  ['show_remote', 'Remote section'],
-  ['show_menus', 'Remote section: menu shortcuts (MPC, Gamma…)'],
-  ['show_picture', 'Picture section: picture mode, dynamic control, lens memory, anamorphic, HDR, Theater Optimizer, motion, e-shift, low latency'],
-  ['show_laser', 'Laser section'],
-  ['show_laser_presets', 'Laser section: Low / Mid / High buttons'],
-  ['show_inputs', 'Source section: inputs'],
-  ['show_info', 'Info section'],
-];
-// Collapsible sections, in card order: [id, label]
+// Collapsible sections, in default card order: [id, label]
 const FOLDS = [['remote', 'Remote'], ['picture', 'Picture'], ['laser', 'Laser'], ['source', 'Source'], ['info', 'Info']];
+// Every section the user can reorder (status + the collapsible ones), default order.
+const SECTION_IDS = ['status', ...FOLDS.map(([id]) => id)];
+// Section → its show_* key, its label and hint in the editor, and its sub-options.
+const SECTION_META = {
+  status: { show: 'show_status', label: 'Status', hint: 'Signal → picture → laser, and the tags' },
+  remote: { show: 'show_remote', label: 'Remote', hint: 'Arrows and OK', subs: [['show_menus', 'Menu shortcuts (MPC, Gamma…)']] },
+  picture: { show: 'show_picture', label: 'Picture', hint: 'Picture mode, dynamic, lens memory, anamorphic, HDR, motion, e-shift, low latency' },
+  laser: { show: 'show_laser', label: 'Laser', hint: 'Laser power', subs: [['show_laser_presets', 'Low / Mid / High buttons']] },
+  source: { show: 'show_inputs', label: 'Source', hint: 'Inputs' },
+  info: { show: 'show_info', label: 'Info', hint: 'Model, firmware, signal details, ECO mode, connection' },
+};
+
+/** Section order from config: known ids, de-duplicated, missing ones appended in default order. */
+function sectionOrder(config) {
+  const list = strList(config.section_order).filter((id) => SECTION_IDS.includes(id));
+  return [...list, ...SECTION_IDS.filter((id) => !list.includes(id))];
+}
 
 // Icons: header (also the power button) and each collapsible section.
 const ICON_DEFAULTS = {
@@ -347,7 +354,12 @@ function normalizeConfig(raw) {
   // Sections that start open (card order).
   const open = strList(c.open_sections).filter((s) => FOLDS.some(([id]) => id === s));
   if (open.length) out.open_sections = FOLDS.map(([id]) => id).filter((id) => open.includes(id));
-  const known = ['type', 'icons', 'styles', 'menu_keys', 'open_sections'];
+  // Section order: stored only when it differs from the default.
+  if (Array.isArray(c.section_order)) {
+    const order = sectionOrder(c);
+    if (JSON.stringify(order) !== JSON.stringify(SECTION_IDS)) out.section_order = order;
+  }
+  const known = ['type', 'icons', 'styles', 'menu_keys', 'open_sections', 'section_order'];
   Object.keys(c).forEach((k) => {
     if (!(k in out) && !(k in DEFAULTS) && !(k in HIDE_LISTS) && !known.includes(k)) out[k] = c[k];
   });
@@ -593,6 +605,57 @@ class JvcProjectorCard extends HTMLElement {
     const box = (id, title) => `<div class="jvc-box"><div class="jvc-box-h">${title}</div><div class="jvc-box-t" data-k="${id}_t"></div>`
       + `${id === 'x' ? '<div class="jvc-mini"><span data-k="x_bar"></span></div>' : `<div class="jvc-box-s" data-k="${id}_1"></div>`}<div class="jvc-box-s" data-k="${id}_2"></div></div>`;
     const arrow = '<ha-icon class="jvc-arrow" icon="mdi:chevron-right"></ha-icon>';
+    // Each section's markup; rendered in the configured order.
+    const blocks = {
+      status: `<div data-sec="status">
+            <div class="jvc-chain">${box('s', 'Signal')}${arrow}${box('p', 'Picture')}${arrow}${box('x', 'Laser')}</div>
+            <div class="jvc-tags" data-k="tags"></div>
+          </div>`,
+      remote: fold('remote', 'Remote', `
+            <div class="jvc-ctl"><div class="jvc-pad">
+              ${key('hide', 'Hide', 'sm')}${key('up', icon('chevron-up'), '', 1)}${key('info', 'Info', 'sm')}
+              ${key('left', icon('chevron-left'), '', 1)}${key('ok', 'OK', 'ok')}${key('right', icon('chevron-right'), '', 1)}
+              ${key('menu', 'Menu', 'sm')}${key('down', icon('chevron-down'), '', 1)}${key('back', 'Back', 'sm')}
+            </div>
+            <div class="jvc-hint">Hold an arrow to repeat it 5×</div>
+            <div class="jvc-opts jvc-menus" data-k="menus"${cfg(c, 'show_menus') && menus ? '' : ' hidden'}>${menus}</div></div>`),
+      picture: fold('picture', 'Picture', `
+            <div class="jvc-ctl">
+              <div class="jvc-row" data-row="mode"><div class="jvc-row-l">Mode</div><div class="jvc-opts" data-opts="mode"></div></div>
+              <div class="jvc-row" data-row="dynamic"><div class="jvc-row-l">Dynamic</div><div class="jvc-opts" data-opts="dynamic"></div></div>
+              <div class="jvc-row" data-row="lens"><div class="jvc-row-l">Lens memory</div><div class="jvc-opts" data-opts="lens"></div></div>
+              <div class="jvc-row" data-row="anamorphic"><div class="jvc-row-l">Anamorphic</div><div class="jvc-opts" data-opts="anamorphic"></div></div>
+              <div class="jvc-row" data-row="hdr_proc"><div class="jvc-row-l">HDR processing</div><div class="jvc-opts" data-opts="hdr_proc"></div></div>
+              <div class="jvc-row" data-row="hdr_level"><div class="jvc-row-l">HDR level</div><div class="jvc-opts" data-opts="hdr_level"></div></div>
+              <div class="jvc-row" data-row="theater_opt"><div class="jvc-row-l">Theater optimizer</div><div class="jvc-opts" data-opts="theater_opt"></div></div>
+              <div class="jvc-row" data-row="cmd"><div class="jvc-row-l">Motion (CMD)</div><div class="jvc-opts" data-opts="cmd"></div></div>
+              <div class="jvc-row" data-row="motion"><div class="jvc-row-l">Motion enhance</div><div class="jvc-opts" data-opts="motion"></div></div>
+              <div class="jvc-row" data-row="eshift"><div class="jvc-row-l">8K e-shift</div><div class="jvc-opts" data-opts="eshift"></div></div>
+              <div class="jvc-row" data-row="low_latency"><div class="jvc-row-l">Low latency</div><div class="jvc-opts" data-opts="low_latency"></div></div>
+            </div>`),
+      laser: fold('laser', 'Laser', `
+            <div class="jvc-ctl">
+              <div class="jvc-laser">
+                <button class="jvc-key sm" data-tap="laser-step" data-dir="-1" aria-label="Laser down">${icon('minus')}</button>
+                <input type="range" class="jvc-range" data-k="laser_range" min="1" max="100" step="1" aria-label="Laser power">
+                <button class="jvc-key sm" data-tap="laser-step" data-dir="1" aria-label="Laser up">${icon('plus')}</button>
+                <span class="jvc-laser-v" data-k="laser_val"></span>
+              </div>
+              <div class="jvc-row" data-k="laser_presets_row"${cfg(c, 'show_laser_presets') ? '' : ' hidden'}><div class="jvc-row-l">Preset</div><div class="jvc-opts">
+                ${LASER_PRESETS.map(([n, val]) => `<button class="jvc-chip" data-tap="laser-set" data-val="${val}">${n}</button>`).join('')}
+              </div></div>
+            </div>`),
+      source: fold('source', 'Source', `
+            <div class="jvc-ctl">
+              <div class="jvc-row" data-row="input"><div class="jvc-row-l">Input</div><div class="jvc-opts" data-opts="input"></div></div>
+            </div>`),
+      info: fold('info', 'Info', `
+            <div class="jvc-info" data-k="info"></div>
+            <div class="jvc-row" data-row="eco"><div class="jvc-row-l">ECO mode</div><div class="jvc-opts" data-opts="eco"></div></div>
+            <div class="jvc-note bad" data-k="eco_note" hidden>ECO mode is on: the projector switches its network off in standby, so Home Assistant can't reach it or turn it on until it is turned on with the remote.</div>
+            <div class="jvc-note" data-k="link"></div>
+            <div class="jvc-note" data-k="missing"></div>`),
+    };
     this.innerHTML = `
       <style>${CARD_CSS}</style>
       <ha-card class="${rootClasses(c)}" style="${esc(rootStyleVars(c))}">
@@ -606,54 +669,7 @@ class JvcProjectorCard extends HTMLElement {
         </div>
         <div class="jvc-standby" data-k="standby" hidden>${standbyText}</div>
         <div class="jvc-body" data-k="body">
-          <div data-sec="status">
-            <div class="jvc-chain">${box('s', 'Signal')}${arrow}${box('p', 'Picture')}${arrow}${box('x', 'Laser')}</div>
-            <div class="jvc-tags" data-k="tags"></div>
-          </div>
-          ${fold('remote', 'Remote', `
-            <div class="jvc-ctl"><div class="jvc-pad">
-              ${key('hide', 'Hide', 'sm')}${key('up', icon('chevron-up'), '', 1)}${key('info', 'Info', 'sm')}
-              ${key('left', icon('chevron-left'), '', 1)}${key('ok', 'OK', 'ok')}${key('right', icon('chevron-right'), '', 1)}
-              ${key('menu', 'Menu', 'sm')}${key('down', icon('chevron-down'), '', 1)}${key('back', 'Back', 'sm')}
-            </div>
-            <div class="jvc-hint">Hold an arrow to repeat it 5×</div>
-            <div class="jvc-opts jvc-menus" data-k="menus"${cfg(c, 'show_menus') && menus ? '' : ' hidden'}>${menus}</div></div>`)}
-          ${fold('picture', 'Picture', `
-            <div class="jvc-ctl">
-              <div class="jvc-row" data-row="mode"><div class="jvc-row-l">Mode</div><div class="jvc-opts" data-opts="mode"></div></div>
-              <div class="jvc-row" data-row="dynamic"><div class="jvc-row-l">Dynamic</div><div class="jvc-opts" data-opts="dynamic"></div></div>
-              <div class="jvc-row" data-row="lens"><div class="jvc-row-l">Lens memory</div><div class="jvc-opts" data-opts="lens"></div></div>
-              <div class="jvc-row" data-row="anamorphic"><div class="jvc-row-l">Anamorphic</div><div class="jvc-opts" data-opts="anamorphic"></div></div>
-              <div class="jvc-row" data-row="hdr_proc"><div class="jvc-row-l">HDR processing</div><div class="jvc-opts" data-opts="hdr_proc"></div></div>
-              <div class="jvc-row" data-row="hdr_level"><div class="jvc-row-l">HDR level</div><div class="jvc-opts" data-opts="hdr_level"></div></div>
-              <div class="jvc-row" data-row="theater_opt"><div class="jvc-row-l">Theater optimizer</div><div class="jvc-opts" data-opts="theater_opt"></div></div>
-              <div class="jvc-row" data-row="cmd"><div class="jvc-row-l">Motion (CMD)</div><div class="jvc-opts" data-opts="cmd"></div></div>
-              <div class="jvc-row" data-row="motion"><div class="jvc-row-l">Motion enhance</div><div class="jvc-opts" data-opts="motion"></div></div>
-              <div class="jvc-row" data-row="eshift"><div class="jvc-row-l">8K e-shift</div><div class="jvc-opts" data-opts="eshift"></div></div>
-              <div class="jvc-row" data-row="low_latency"><div class="jvc-row-l">Low latency</div><div class="jvc-opts" data-opts="low_latency"></div></div>
-            </div>`)}
-          ${fold('laser', 'Laser', `
-            <div class="jvc-ctl">
-              <div class="jvc-laser">
-                <button class="jvc-key sm" data-tap="laser-step" data-dir="-1" aria-label="Laser down">${icon('minus')}</button>
-                <input type="range" class="jvc-range" data-k="laser_range" min="1" max="100" step="1" aria-label="Laser power">
-                <button class="jvc-key sm" data-tap="laser-step" data-dir="1" aria-label="Laser up">${icon('plus')}</button>
-                <span class="jvc-laser-v" data-k="laser_val"></span>
-              </div>
-              <div class="jvc-row" data-k="laser_presets_row"${cfg(c, 'show_laser_presets') ? '' : ' hidden'}><div class="jvc-row-l">Preset</div><div class="jvc-opts">
-                ${LASER_PRESETS.map(([n, val]) => `<button class="jvc-chip" data-tap="laser-set" data-val="${val}">${n}</button>`).join('')}
-              </div></div>
-            </div>`)}
-          ${fold('source', 'Source', `
-            <div class="jvc-ctl">
-              <div class="jvc-row" data-row="input"><div class="jvc-row-l">Input</div><div class="jvc-opts" data-opts="input"></div></div>
-            </div>`)}
-          ${fold('info', 'Info', `
-            <div class="jvc-info" data-k="info"></div>
-            <div class="jvc-row" data-row="eco"><div class="jvc-row-l">ECO mode</div><div class="jvc-opts" data-opts="eco"></div></div>
-            <div class="jvc-note bad" data-k="eco_note" hidden>ECO mode is on: the projector switches its network off in standby, so Home Assistant can't reach it or turn it on until it is turned on with the remote.</div>
-            <div class="jvc-note" data-k="link"></div>
-            <div class="jvc-note" data-k="missing"></div>`)}
+          ${sectionOrder(c).map((id) => blocks[id]).join('')}
         </div>
       </ha-card>`;
     this._root = this.querySelector('.jvc');
@@ -1141,6 +1157,23 @@ const EDITOR_CSS = `
         .jvce-check { display: flex; align-items: center; gap: var(--ltek-sp-2); padding: var(--ltek-sp-1) 0; color: var(--ltek-c-label);
           font-size: var(--ltek-fs-body); cursor: pointer; }
         .jvce-check input { accent-color: var(--ltek-c-accent); }
+        .jvce-order { display: flex; flex-direction: column; gap: var(--ltek-sp-1); margin-bottom: var(--ltek-sp-3); }
+        .jvce-sec-row { border: 1px solid var(--ltek-c-border-soft); border-radius: var(--ltek-r-md); background: var(--ltek-c-surface-raised);
+          padding: var(--ltek-sp-1) var(--ltek-sp-3); }
+        .jvce-sec-row.off .jvce-sec-name { color: var(--ltek-c-muted); }
+        .jvce-sec-line { display: flex; align-items: center; gap: var(--ltek-sp-3); }
+        .jvce-moves { display: flex; flex-direction: column; flex: none; }
+        .jvce-move { border: none; background: none; padding: 0; line-height: 0; color: var(--ltek-c-icon); cursor: pointer; }
+        .jvce-move:hover:not([disabled]) { color: var(--ltek-c-icon-hover); }
+        .jvce-move[disabled] { opacity: .25; cursor: default; }
+        .jvce-move ha-icon { --mdc-icon-size: var(--ltek-icon-sm); }
+        .jvce-sec-name { flex: 1 1 auto; min-width: 0; }
+        .jvce-sec-name small { color: var(--ltek-c-muted); font-size: var(--ltek-fs-small); }
+        .jvce-open { flex: none; white-space: nowrap; }
+        .jvce-sub-opt { padding-left: 32px; }
+        .jvce-preset { padding: 3px 8px; border: 1px solid var(--ltek-c-border); border-radius: var(--ltek-r-ctrl); background: transparent;
+          color: var(--ltek-c-text); font-size: var(--ltek-fs-small); cursor: pointer; }
+        .jvce-preset:hover { border-color: var(--ltek-c-accent); background: var(--ltek-c-accent-fade-soft); }
         .jvce-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0 var(--ltek-sp-4); }
         .jvce-color { display: flex; flex: 1 1 auto; gap: var(--ltek-sp-2); flex-wrap: wrap; min-width: 0; }
         .jvce-color select.jvce-cmode { flex: 0 0 auto; min-width: 120px; }
@@ -1240,6 +1273,28 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${isSet && scope ? `<button class="jvce-reset" data-reset="${key}" data-scope="${scope}" title="Back to default"><ha-icon icon="mdi:restore"></ha-icon></button>` : ''}</div>`;
   }
 
+  /** The ordered section list: move up / down, show, start open, and sub-options. */
+  _sectionsBody() {
+    const c = this._config;
+    const order = sectionOrder(c);
+    const openSecs = c.open_sections || [];
+    const btn = (id, dir, disabled) => `<button class="jvce-move" data-move="${id}" data-dir="${dir}"${disabled ? ' disabled' : ''}
+      aria-label="Move ${esc(SECTION_META[id].label)} ${dir < 0 ? 'up' : 'down'}" title="Move ${dir < 0 ? 'up' : 'down'}"><ha-icon icon="mdi:chevron-${dir < 0 ? 'up' : 'down'}"></ha-icon></button>`;
+    return `<div class="jvce-order">${order.map((id, i) => {
+      const m = SECTION_META[id];
+      const shown = cfg(c, m.show);
+      const subs = (m.subs || []).map(([k, n]) => `<label class="jvce-check jvce-sub-opt"><input type="checkbox" data-key="${k}"${cfg(c, k) ? ' checked' : ''}${shown ? '' : ' disabled'}>${n}</label>`).join('');
+      return `<div class="jvce-sec-row${shown ? '' : ' off'}" data-section="${id}">
+        <div class="jvce-sec-line">
+          <span class="jvce-moves">${btn(id, -1, i === 0)}${btn(id, 1, i === order.length - 1)}</span>
+          <label class="jvce-check jvce-sec-name"><input type="checkbox" data-key="${m.show}"${shown ? ' checked' : ''}><span><b>${esc(m.label)}</b> <small>${esc(m.hint)}</small></span></label>
+          ${id === 'status' ? '' : `<label class="jvce-check jvce-open"><input type="checkbox" data-open="${id}"${openSecs.includes(id) ? ' checked' : ''}${shown ? '' : ' disabled'}>Start open</label>`}
+        </div>${subs}
+      </div>`;
+    }).join('')}</div>
+    ${c.section_order ? '<button class="jvce-preset" data-order-reset>Default order</button>' : ''}`;
+  }
+
   _buttonsBody() {
     const c = this._config;
     const E = resolveEntities(this._hass, cfg(c, 'device'));
@@ -1277,7 +1332,6 @@ class JvcProjectorCardEditor extends HTMLElement {
     const devices = listDevices(this._hass);
     const dev = cfg(c, 'device');
     const st = c.styles || {};
-    const openSecs = c.open_sections || [];
     const deviceBody = `
       <p class="jvce-hint">Which projector to show. Entities are found automatically, so renamed entity IDs keep working.</p>
       <div class="jvce-row"><label class="lbl">Device</label>
@@ -1315,11 +1369,8 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${cfg(c, 'collapsible') ? `<label class="jvce-check"><input type="checkbox" data-key="start_collapsed"${cfg(c, 'start_collapsed') ? ' checked' : ''}>
         Start collapsed</label>` : ''}
       <div class="jvce-group">Sections</div>
-      <p class="jvce-hint">Status sits on top; every control is in a collapsed section so nothing changes by accident.</p>
-      ${SECTIONS.map(([k, n]) => `<label class="jvce-check"><input type="checkbox" data-key="${k}"${cfg(c, k) ? ' checked' : ''}>${n}</label>`).join('')}
-      <div class="jvce-group">Start open</div>
-      <p class="jvce-hint">Sections that are already open when the Dashboard loads (e.g. the Remote).</p>
-      <div class="jvce-checks">${FOLDS.map(([id, n]) => `<label class="jvce-check"><input type="checkbox" data-open="${id}"${openSecs.includes(id) ? ' checked' : ''}>${n}</label>`).join('')}</div>`;
+      <p class="jvce-hint">The order of the sections on the card (use the arrows), whether each is shown, and which start open. Every control is in a collapsed section so nothing changes by accident.</p>
+      ${this._sectionsBody()}`;
     const iconBody = `
       <p class="jvce-hint">Any Material Design icon — type just the name (e.g. <b>projector-screen</b>); "mdi:" is added for you. Leave empty for the default.</p>
       ${Object.keys(ICON_DEFAULTS).map((k) => `
@@ -1353,7 +1404,8 @@ class JvcProjectorCardEditor extends HTMLElement {
     }));
     this.querySelectorAll('[data-key]').forEach((el) => {
       const key = el.dataset.key;
-      const reveals = ['show_when_off', 'collapsible', 'show_dot', 'standby_text', 'power_hold_on'].includes(key);
+      const reveals = ['show_when_off', 'collapsible', 'show_dot', 'standby_text', 'power_hold_on'].includes(key)
+        || Object.values(SECTION_META).some((m) => m.show === key);
       if (el.type === 'checkbox') el.addEventListener('change', () => { this._set(key, el.checked); if (reveals) this._render(); });
       else el.addEventListener('change', () => { this._set(key, el.value.trim()); if (reveals) this._render(); });
     });
@@ -1391,6 +1443,21 @@ class JvcProjectorCardEditor extends HTMLElement {
       this._config.menu_keys = [...known.filter((k) => picked.has(k)), ...cur.filter((k) => !known.includes(k) && picked.has(k))];
       this._emit();
     }));
+    this.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => {
+      const order = sectionOrder(this._config);
+      const i = order.indexOf(b.dataset.move);
+      const j = i + Number(b.dataset.dir);
+      if (i < 0 || j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      this._config.section_order = order;
+      this._emit(); // normalize drops it again if it is back to the default order
+      this._render();
+      const again = this.querySelector(`[data-move="${b.dataset.move}"][data-dir="${b.dataset.dir}"]:not([disabled])`)
+        || this.querySelector(`[data-move="${b.dataset.move}"]:not([disabled])`);
+      if (again) again.focus(); // keep keyboard focus on the moved section
+    }));
+    const reset = this.querySelector('[data-order-reset]');
+    if (reset) reset.addEventListener('click', () => { delete this._config.section_order; this._emit(); this._render(); });
     this.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('change', () => {
       const list = (this._config.open_sections || []).filter((s) => s !== el.dataset.open);
       if (el.checked) list.push(el.dataset.open);
@@ -1431,7 +1498,7 @@ class JvcProjectorCardEditor extends HTMLElement {
 // Test hooks (pure helpers; no effect in the browser)
 JvcProjectorCard._test = {
   BUILD_NUMBER, CARD_CSS, EDITOR_CSS, DEFAULTS, ENTITY_KEYS, OPTIONAL_ENTITIES, STYLE_DEFS, ICON_DEFAULTS, MENU_KEYS, DEFAULT_MENU_KEYS,
-  normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
+  SECTION_IDS, sectionOrder, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
   PICTURE_MODES, COLORIMETRY, CONTENT_TYPES, LENS_MEMORIES, HDR_PROCESSING, HDR_LEVEL, isNoSignal,
 };
 

@@ -2,7 +2,7 @@
 
 A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
 
-Current build: **v2026.10.14.3** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.15.4** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 
@@ -84,6 +84,7 @@ Everything is in the visual editor (Device · Card & sections · Buttons · Icon
 | `collapsible` | `false` | Tap the header to collapse the card to just the header while the projector is on. |
 | `start_collapsed` | `false` | With `collapsible`, start collapsed. |
 | `open_sections` | | Sections already open when the Dashboard loads: `remote`, `picture`, `laser`, `source`, `info`. |
+| `section_order` | `[status, remote, picture, laser, source, info]` | Order of the sections on the card. List only the ones you want first; the rest follow in the default order. In the editor: **Card & sections → Sections**, with ↑ / ↓ arrows. |
 | `menu_keys` | `[mpc, gamma, color_temp, lens_control, advanced_menu]` | Menu shortcuts under the remote. Any of `mpc` `gamma` `color_temp` `color_profile` `gamma_settings` `pic_adj` `picture_mode` `cmd` `lens_control` `lens_ap` `anamo` `setting_memory` `mode_1` `mode_2` `mode_3` `input` `3d_format` `advanced_menu`; `[]` = none. |
 | `hide_modes` · `hide_dynamic` · `hide_inputs` · `hide_lens` | | Buttons to hide, by the integration's value (e.g. `[vivid, sdr2]`, `[off]`, `[hdmi2]`, `[memory_4, memory_5]`). The editor's **Buttons** panel lists them. |
 | `laser_step` | `5` | How much − / + change the laser power (1–50). |
@@ -96,12 +97,13 @@ Everything is in the visual editor (Device · Card & sections · Buttons · Icon
 
 Backgrounds and borders (`card_background`, `card_border_color`, `box_background`, `divider_color`, `chip_background`, `chip_border_color`) also accept `transparent` — the editor offers it as a choice.
 
-Example — remote open on load, extra lens shortcuts, no Dynamic "Off":
+Example — remote first and open on load, extra lens shortcuts, no Dynamic "Off":
 
 ```yaml
 type: custom:jvc-projector-card
 title: JVC NZ8
 open_sections: [remote]
+section_order: [remote, status, picture]
 menu_keys: [mpc, gamma, color_temp, lens_control, anamo, setting_memory, advanced_menu]
 hide_dynamic: [off]
 styles:

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2026.10.15.4
+
+- **Reorder the sections.** The editor's **Sections** list (Card & sections) now shows every section in card order, with ↑ / ↓ arrows to move it, its Show checkbox, its **Start open** checkbox and its sub-options (menu shortcuts under Remote, Low / Mid / High under Laser). Status can move too. A **Default order** button puts them back. YAML: `section_order: [remote, status, …]` — only written when it differs from the default; sections you leave out follow in the default order.
+
 ## v2026.10.14.3
 
 For the Ltek integration v2026.10.14.3; everything still works with mjmcg's original and older Ltek builds.
