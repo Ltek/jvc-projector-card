@@ -2,7 +2,7 @@
 
 A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
 
-Current build: **v2026.10.15.7** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.15.8** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 
@@ -68,7 +68,7 @@ The integration's **Model** sensor is disabled by default; enable it in **Settin
 
 ## Options
 
-Everything is in the visual editor (Device · Card & sections · Buttons · Icons · Appearance). YAML keys are only written when they differ from the default.
+Everything is in the visual editor (Device · Card · Sections · Buttons · Icons · Appearance). YAML keys are only written when they differ from the default.
 
 | Key | Default | Description |
 |---|---|---|
@@ -84,7 +84,7 @@ Everything is in the visual editor (Device · Card & sections · Buttons · Icon
 | `collapsible` | `false` | Tap the header to collapse the card to just the header while the projector is on. |
 | `start_collapsed` | `false` | With `collapsible`, start collapsed. |
 | `open_sections` | | Sections already open when the Dashboard loads: `remote`, `picture`, `laser`, `source`, `info`. |
-| `section_order` | `[status, remote, picture, laser, source, info]` | Order of the sections on the card. List only the ones you want first; the rest follow in the default order. In the editor: **Card & sections → Sections** — one row per section with its icon, ↑ / ↓ to move it, **Open** (start open) and an **eye** to show or hide it; Remote and Laser also carry eyes for their menu shortcuts and Low / Mid / High buttons. |
+| `section_order` | `[status, remote, picture, laser, source, info]` | Order of the sections on the card. List only the ones you want first; the rest follow in the default order. In the editor: **the **Sections** panel** — one row per section with its icon, ↑ / ↓ to move it, **Open** (start open) and an **eye** to show or hide it; Remote and Laser also carry eyes for their menu shortcuts and Low / Mid / High buttons. |
 | `section_names` | | Your own name per section, e.g. `{ remote: Menu keys }`. Editor: the **pencil** on a section row → Name. |
 | `hidden_items` | | Single settings to hide, as `section.setting`, e.g. `picture.motion`, `status.picture`. Editor: pencil → **Settings**, one eye per setting. Settings that already have their own option (menu shortcuts, flows…) use that option instead. |
 | `section_merge` | | Show a section's settings inside another section, e.g. `laser: picture`: the section disappears and its visible settings appear at the end of the target, under its name. Not into a hidden section, and no chains (a section others merge into stays its own). Editor: pencil → **Merge**. |

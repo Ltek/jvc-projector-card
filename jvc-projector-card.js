@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.7
+// Version: v2026.10.15.8
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.7';
+const BUILD_NUMBER = 'v2026.10.15.8';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -486,6 +486,26 @@ function rootClasses(config) {
 // ---------------------------------------------------------------------------
 function okState(v) { return v !== undefined && v !== null && v !== '' && v !== 'unknown' && v !== 'unavailable'; }
 
+/** Make `from`'s children match `to`'s (a parsed template) while keeping every element that is
+ *  still the same tag in place. The card is patched instead of rebuilt on each config change, so
+ *  the editor preview doesn't flash: icons, open sections and listeners stay. */
+function morphChildren(from, to) {
+  const a = [...from.childNodes];
+  const b = [...to.childNodes];
+  b.forEach((nb, i) => {
+    const na = a[i];
+    if (!na) { from.appendChild(nb); return; }
+    if (na.nodeType !== nb.nodeType || na.nodeName !== nb.nodeName) { from.replaceChild(nb, na); return; }
+    if (na.nodeType === 3 || na.nodeType === 8) { if (na.nodeValue !== nb.nodeValue) na.nodeValue = nb.nodeValue; return; }
+    if (na.nodeType !== 1) return;
+    [...na.attributes].forEach((at) => { if (!nb.hasAttribute(at.name)) na.removeAttribute(at.name); });
+    [...nb.attributes].forEach((at) => { if (na.getAttribute(at.name) !== at.value) na.setAttribute(at.name, at.value); });
+    if (na.localName === 'details') na.open = nb.hasAttribute('open');
+    morphChildren(na, nb.localName === 'template' ? nb.content : nb);
+  });
+  a.slice(b.length).forEach((n) => n.remove());
+}
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -640,6 +660,7 @@ class JvcProjectorCard extends HTMLElement {
   setConfig(config) {
     if (!config || typeof config !== 'object') throw new Error('Invalid configuration');
     const next = normalizeConfig(config);
+    if (this._built && JSON.stringify(next) === JSON.stringify(this._config)) return;
     if (cfg(next, 'start_collapsed') !== cfg(this._config, 'start_collapsed') || cfg(next, 'collapsible') !== cfg(this._config, 'collapsible')) {
       this._collapsed = undefined; // re-apply the configured starting state
     }
@@ -688,6 +709,25 @@ class JvcProjectorCard extends HTMLElement {
   }
 
   // -- build once -----------------------------------------------------------
+  /** First build: plain innerHTML. Later: patch the existing DOM (see morphChildren). */
+  _setHTML(html) {
+    if (!this.querySelector('ha-card')) { this.innerHTML = html; return; }
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    morphChildren(this, tpl.content);
+  }
+
+  /** True the first time for this element + key: listeners survive a patch, so bind them once. */
+  _once(el, key) {
+    if (!el) return false;
+    if (!this._wired) this._wired = new WeakMap();
+    const done = this._wired.get(el) || new Set();
+    if (done.has(key)) return false;
+    done.add(key);
+    this._wired.set(el, done);
+    return true;
+  }
+
   _build() {
     const c = this._config;
     if (!this._open) this._open = new Set(c.open_sections || []);
@@ -759,7 +799,7 @@ class JvcProjectorCard extends HTMLElement {
             <div class="jvc-note" data-k="link"></div>
             <div class="jvc-note" data-k="missing"></div>`),
     };
-    this.innerHTML = `
+    this._setHTML(`
       <style>${CARD_CSS}</style>
       <ha-card class="${rootClasses(c)}" style="${esc(rootStyleVars(c))}">
         <div class="jvc-head${cfg(c, 'collapsible') ? ' is-tap' : ''}"${cfg(c, 'collapsible') ? ' data-tap="collapse"' : ''}>
@@ -774,18 +814,18 @@ class JvcProjectorCard extends HTMLElement {
         <div class="jvc-body" data-k="body">
           ${sectionOrder(c).map((id) => blocks[id]).join('')}
         </div>
-      </ha-card>`;
+      </ha-card>`);
     this._root = this.querySelector('.jvc');
     this._k = {};
     this.querySelectorAll('[data-k]').forEach((el) => { this._k[el.dataset.k] = el; });
     this._applyLayout();
-    this.querySelectorAll('details.jvc-fold').forEach((d) => d.addEventListener('toggle', () => {
+    this.querySelectorAll('details.jvc-fold').forEach((d) => this._once(d, 'toggle') && d.addEventListener('toggle', () => {
       if (d.open) this._open.add(d.dataset.sec); else this._open.delete(d.dataset.sec);
     }));
     const range = this._k.laser_range;
-    range.addEventListener('input', () => { this._dragging = true; this._k.laser_val.textContent = `${range.value}%`; });
-    range.addEventListener('change', () => { this._dragging = false; this._setLaser(Number(range.value)); });
-    this._bind();
+    if (this._once(range, 'range')) range.addEventListener('input', () => { this._dragging = true; this._k.laser_val.textContent = `${range.value}%`; });
+    if (this._once(range, 'range-change')) range.addEventListener('change', () => { this._dragging = false; this._setLaser(Number(range.value)); });
+    if (this._once(this._root, 'bind')) this._bind();
     this._built = true;
     this._sig = '';
     this._optSig = {};
@@ -1588,9 +1628,10 @@ class JvcProjectorCardEditor extends HTMLElement {
       <label class="jvce-check"><input type="checkbox" data-key="collapsible"${cfg(c, 'collapsible') ? ' checked' : ''}>
         Tap the header to collapse the card to just the header (while the projector is on)</label>
       ${cfg(c, 'collapsible') ? `<label class="jvce-check"><input type="checkbox" data-key="start_collapsed"${cfg(c, 'start_collapsed') ? ' checked' : ''}>
-        Start collapsed</label>` : ''}
-      <div class="jvce-group">Sections</div>
+        Start collapsed</label>` : ''}`;
+    const sectionsBody = `
       <p class="jvce-hint">The order of the sections on the card (↑ / ↓), which start open, and the eye to show or hide each one. Every control is in a collapsed section so nothing changes by accident.</p>
+      <p class="jvce-hint">Use the <b>pencil</b> on a section to rename it, hide single settings, or show its settings inside another section.</p>
       ${this._sectionsBody()}`;
     const iconBody = `
       <p class="jvce-hint">Any Material Design icon — type just the name (e.g. <b>projector-screen</b>); "mdi:" is added for you. Leave empty for the default.</p>
@@ -1609,7 +1650,8 @@ class JvcProjectorCardEditor extends HTMLElement {
     this.innerHTML = `<style>${EDITOR_CSS}</style>
       <div class="jvce">
         ${this._panel('device', 'mdi:projector', 'Device', deviceBody)}
-        ${this._panel('card', 'mdi:card-text-outline', 'Card & sections', cardBody)}
+        ${this._panel('card', 'mdi:card-text-outline', 'Card', cardBody)}
+        ${this._panel('sections', 'mdi:view-agenda-outline', 'Sections', sectionsBody)}
         ${this._panel('buttons', 'mdi:gesture-tap-button', 'Buttons', this._buttonsBody())}
         ${this._panel('icons', 'mdi:emoticon-outline', 'Icons', iconBody)}
         ${this._panel('look', 'mdi:palette', 'Appearance', `<p class="jvce-hint">Sizes and colors. Every color can follow your theme or be custom; "Back to default" (↺) resets a size.</p>${looks}`)}
