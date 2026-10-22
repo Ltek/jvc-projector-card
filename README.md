@@ -2,7 +2,7 @@
 
 A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
 
-Current build: **v2026.10.15.10** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.22.11** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 

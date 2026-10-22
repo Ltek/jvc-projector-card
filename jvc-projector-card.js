@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.15.10
+// Version: v2026.10.22.11
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.15.10';
+const BUILD_NUMBER = 'v2026.10.22.11';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -508,6 +508,9 @@ function morphChildren(from, to) {
   a.slice(b.length).forEach((n) => n.remove());
 }
 
+// After a hold runs, the click that ends it is ignored for this long (a later tap is a new tap).
+const HOLD_CLICK_MS = 1500;
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -520,6 +523,7 @@ function powerOf(psState, remoteState) {
   return remoteState;
 }
 
+const DRAG_HOLD_MS = 1500; // a slider input holds off state updates this long (renewed while dragging)
 const PENDING_MS = 15000; // how long a tapped option shows as "sending" before the poll catches up
 
 // ---------------------------------------------------------------------------
@@ -535,7 +539,8 @@ const CARD_CSS = `
 .jvc.is-flat { box-shadow: none; }
 .jvc.is-hdr { --jvc-ctx: var(--jvc-hdr, #ffb300); }
 .jvc [hidden] { display: none !important; }
-.jvc button { font: inherit; }
+/* Buttons with a hold: no text selection or callout on a long-press (iOS / Android). */
+.jvc button { font: inherit; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .jvc-head { display: flex; align-items: center; gap: 10px; min-height: 36px; }
 .jvc-power { flex: 0 0 auto; width: calc(var(--jvc-header-icon-size, 22px) + 14px); height: calc(var(--jvc-header-icon-size, 22px) + 14px);
   border-radius: 50%; border: none; cursor: pointer; background: transparent; color: var(--disabled-text-color, #777);
@@ -657,7 +662,7 @@ class JvcProjectorCard extends HTMLElement {
     this._preview = false;
     this._open = null; // sections open right now (survives config changes); seeded from open_sections
     this._pending = {}; // entity_id → { value, until }: a tap the next poll hasn't confirmed yet
-    this._dragging = false;
+    this._dragUntil = 0; // a laser drag holds off state updates until then (see _dragStart)
   }
 
   setConfig(config) {
@@ -826,8 +831,8 @@ class JvcProjectorCard extends HTMLElement {
       if (d.open) this._open.add(d.dataset.sec); else this._open.delete(d.dataset.sec);
     }));
     const range = this._k.laser_range;
-    if (this._once(range, 'range')) range.addEventListener('input', () => { this._dragging = true; this._k.laser_val.textContent = `${range.value}%`; });
-    if (this._once(range, 'range-change')) range.addEventListener('change', () => { this._dragging = false; this._setLaser(Number(range.value)); });
+    if (this._once(range, 'range')) range.addEventListener('input', () => { this._dragStart(); this._k.laser_val.textContent = `${range.value}%`; });
+    if (this._once(range, 'range-change')) range.addEventListener('change', () => { this._dragEnd(); this._setLaser(Number(range.value)); });
     if (this._once(this._root, 'bind')) this._bind();
     this._built = true;
     this._sig = '';
@@ -839,7 +844,14 @@ class JvcProjectorCard extends HTMLElement {
   _bind() {
     const root = this._root;
     const target = (e) => e.target.closest && e.target.closest('[data-tap],[data-hold],[data-opt]');
-    const cancel = () => { if (this._press) { clearTimeout(this._press.timer); this._press = null; } };
+    // Leaving the button (or a cancelled pointer) stops a hold that hasn't fired yet. A hold that already
+    // ran is kept, so the click that follows it is swallowed: on touch screens the browser sends
+    // pointerleave right after pointerup, before that click.
+    const cancel = () => {
+      if (!this._press) return;
+      clearTimeout(this._press.timer);
+      if (!this._press.held) this._press = null;
+    };
     root.addEventListener('pointerdown', (e) => {
       const el = target(e);
       if (!el || el.dataset.opt !== undefined || !el.dataset.hold) return;
@@ -847,6 +859,7 @@ class JvcProjectorCard extends HTMLElement {
       const press = { el, held: false };
       press.timer = setTimeout(() => {
         press.held = true;
+        press.heldAt = Date.now();
         el.classList.add('jvc-held');
         setTimeout(() => el.classList.remove('jvc-held'), 300);
         this._run(el.dataset.hold, el);
@@ -862,7 +875,7 @@ class JvcProjectorCard extends HTMLElement {
       const press = this._press;
       this._press = null;
       if (press) clearTimeout(press.timer);
-      if (press && press.el === el && press.held) return; // hold already ran
+      if (press && press.el === el && press.held && Date.now() - press.heldAt < HOLD_CLICK_MS) return; // hold already ran
       if (el.dataset.opt !== undefined) { this._select(el.dataset.ent, el.dataset.opt); return; }
       if (el.dataset.tap) this._run(el.dataset.tap, el);
       else if (el.dataset.hold) this._confirm(el, el.dataset.hold, 'Hold to run it');
@@ -910,6 +923,18 @@ class JvcProjectorCard extends HTMLElement {
     else this._call('select', 'select_option', { entity_id: entityId, option });
     this._update(true);
   }
+
+  // The laser slider isn't overwritten while it is dragged. The hold expires on its own, so a drag
+  // that never sends 'change' (touch cancelled, released off the page) can't freeze the slider.
+  _dragStart() {
+    this._dragUntil = Date.now() + DRAG_HOLD_MS;
+    clearTimeout(this._dragTimer);
+    this._dragTimer = setTimeout(() => { if (this._built && !this._isDragging()) this._update(true); }, DRAG_HOLD_MS + 50);
+  }
+
+  _dragEnd() { this._dragUntil = 0; clearTimeout(this._dragTimer); }
+
+  _isDragging() { return Date.now() < this._dragUntil; }
 
   _laserState() {
     const E = this._ents || {};
@@ -1162,7 +1187,7 @@ class JvcProjectorCard extends HTMLElement {
     // laser
     const range = K.laser_range;
     ['min', 'max'].forEach((a) => { if (range.getAttribute(a) !== String(L[a])) range.setAttribute(a, String(L[a])); });
-    if (!this._dragging) {
+    if (!this._isDragging()) {
       if (laserShown !== null && range.value !== String(laserShown)) range.value = String(laserShown);
       set('laser_val', laserShown === null ? '—' : `${laserShown}%`);
     }

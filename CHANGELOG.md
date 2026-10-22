@@ -1,5 +1,11 @@
 # Changelog
 
+## v2026.10.22.11
+
+- **Holds on a phone or tablet no longer also tap.** Lifting your finger after a hold made the browser send a tap too: holding an arrow sent 6 presses instead of 5, and holding power for standby was followed by a "tap again to confirm" prompt with the button armed. The click that ends a hold is now ignored.
+- Long-pressing a button no longer selects its text or opens the iOS callout.
+- A laser drag that never finished (touch cancelled, released off the page) no longer stops the slider from following the projector.
+
 ## v2026.10.15.10
 
 - **Merged sections follow their own checks.** A merged section's settings now show only when that section would show on its own — e.g. Picture merged elsewhere without its entities no longer leaves an empty heading, and merged controls never appear for a missing entity.
