@@ -1,5 +1,10 @@
 # Changelog
 
+## v2026.10.23.13
+
+- **The status boxes stay side by side on a phone.** They stacked whenever the status area was under 360 px, which is every phone in portrait. Now they stack only under 260 px (e.g. a small grid column).
+- **New `stack_when_narrow`** (Sections → pencil on Status → Options): *Only on a very narrow card* (default), *Always* or *Never*.
+
 ## v2026.10.23.12
 
 - **Status is two boxes, Signal → Picture**, with the laser as a bar inside Picture. The values have about half the width each instead of a third, so they fit.

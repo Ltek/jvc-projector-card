@@ -4,7 +4,7 @@ A Home Assistant Dashboard card for **JVC D-ILA projectors** (NZ / RS / N series
 picture mode and laser at a glance, and reach the remote, picture settings, laser power and inputs
 from one card, without a stray tap ever stopping your movie. Set up in a visual editor.
 
-Current build: **v2026.10.23.12** · full history in [CHANGELOG.md](CHANGELOG.md) · every YAML option in [OPTIONS.md](OPTIONS.md)
+Current build: **v2026.10.23.13** · full history in [CHANGELOG.md](CHANGELOG.md) · every YAML option in [OPTIONS.md](OPTIONS.md)
 
 ```
  ▣  Projector ●                     2160p24 · HDR10 · Frame Adapt HDR
@@ -83,7 +83,7 @@ HACS → **⋮ → Custom repositories** → `https://github.com/Ltek/jvc-projec
 - Finds the integration's entities by their translation keys, so **renamed entities keep working**.
 - Rows appear only for the settings your model has, and hide while the projector disables them (HDR
   settings without HDR, CMD and Dynamic while low latency is on).
-- On a narrow card the boxes stack.
+- **Phone-friendly:** the boxes stay side by side on a phone in portrait, and stack only on a very narrow card. Or choose always / never.
 
 ---
 

@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.23.12
+// Version: v2026.10.23.13
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.23.12';
+const BUILD_NUMBER = 'v2026.10.23.13';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -193,6 +193,7 @@ const DEFAULTS = {
   show_inputs: true,
   show_info: true,
   laser_step: 5,
+  stack_when_narrow: 'auto', // status boxes on a narrow card: auto (stack under 260 px) | always | never
   accent_color: '',
   hdr_color: '',
   warming_color: '',
@@ -367,6 +368,7 @@ function normalizeSectionEdits(c, out) {
 const WHEN_OFF = [['hide', 'Hide the entire card'], ['collapse', 'Collapse to the header'], ['expanded', 'Keep expanded']];
 // Ancestors that mean "the Dashboard is being edited / this is the editor preview".
 const EDITOR_WRAPPERS = ['hui-card-preview', 'hui-dialog-edit-card', 'hui-card-edit-mode', 'hui-card-options', 'hui-section-edit-mode'];
+const STACK_MODES = [['auto', 'Only on a very narrow card'], ['always', 'Always'], ['never', 'Never (always side by side)']];
 const STANDBY_TEXT = [['below', 'Below the title'], ['inline', 'Inline with the title'], ['hidden', 'Hidden']];
 
 /** String list: trimmed, de-duplicated, empties dropped. */
@@ -439,6 +441,7 @@ function normalizeConfig(raw) {
   }
   const known = ['type', 'icons', 'styles', 'menu_keys', 'open_sections', 'section_order', 'section_names', 'hidden_items', 'section_merge'];
   if (out.when_off !== undefined && !WHEN_OFF.some(([v]) => v === out.when_off)) delete out.when_off;
+  if (out.stack_when_narrow !== undefined && !STACK_MODES.some(([v]) => v === out.stack_when_narrow)) delete out.stack_when_narrow;
   normalizeSectionEdits(c, out);
   Object.keys(c).forEach((k) => {
     if (k === 'show_when_off') return; // replaced by when_off
@@ -477,7 +480,7 @@ function rootStyleVars(config) {
 /** Classes on the card root that depend on config (constant stylesheet, no interpolation). */
 function rootClasses(config) {
   const st = config.styles || {};
-  const cls = ['jvc'];
+  const cls = ['jvc', `stack-${cfg(config, 'stack_when_narrow')}`];
   if (st.card_border_color) cls.push('has-border');
   if (st.card_background === 'transparent') cls.push('is-flat');
   return cls.join(' ');
@@ -595,10 +598,14 @@ const CARD_CSS = `
 .jvc-laserrow-v { flex: 0 0 auto; font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color)); font-variant-numeric: tabular-nums; }
 .jvc-status { container-type: inline-size; }
 /* Narrow card: stack Signal over Picture, the arrow points down. */
-@container (max-width: 360px) {
-  .jvc-status .jvc-chain { flex-direction: column; }
-  .jvc-status .jvc-arrow { transform: rotate(90deg); }
+/* Stacking (stack_when_narrow): auto stacks the boxes only on a really narrow card (status area under
+   260 px — a phone in portrait stays side by side); always stacks them; never keeps them side by side. */
+@container (max-width: 260px) {
+  .jvc.stack-auto .jvc-status .jvc-chain { flex-direction: column; }
+  .jvc.stack-auto .jvc-status .jvc-arrow { transform: rotate(90deg); }
 }
+.jvc.stack-always .jvc-status .jvc-chain { flex-direction: column; }
+.jvc.stack-always .jvc-status .jvc-arrow { transform: rotate(90deg); }
 .jvc-mini { height: 4px; margin: 5px 10% 4px; border-radius: 2px; background: rgba(127,127,127,0.2); overflow: hidden; }
 .jvc-mini > span { display: block; height: 100%; border-radius: 2px; background: var(--jvc-ctx); transition: width .4s ease; }
 .jvc-arrow { align-self: center; color: var(--jvc-icon-color, var(--jvc-ctx)); --mdc-icon-size: 18px; }
@@ -1589,6 +1596,11 @@ class JvcProjectorCardEditor extends HTMLElement {
   /** Section-specific options shown in its edit panel. */
   _secOptions(id) {
     const c = this._config;
+    if (id === 'status') {
+      return `      <div class="jvce-group">Layout</div>
+      <div class="jvce-row"><label class="lbl">Stack the boxes</label><select data-key="stack_when_narrow">${STACK_MODES.map(([v, n]) => `<option value="${v}"${v === cfg(c, 'stack_when_narrow') ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
+      <p class="jvce-hint">Put the boxes one above the other. <b>Only on a very narrow card</b> keeps them side by side on a phone and stacks them when the card is narrower still (e.g. a small grid column).</p>`;
+    }
     if (id === 'laser') {
       return `<div class="jvce-group">Options</div>
       <p class="jvce-hint">How much − and + change the laser power (Low / Mid / High match the projector's own settings).</p>
@@ -1875,7 +1887,7 @@ class JvcProjectorCardEditor extends HTMLElement {
 // Test hooks (pure helpers; no effect in the browser)
 JvcProjectorCard._test = {
   BUILD_NUMBER, CARD_CSS, EDITOR_CSS, DEFAULTS, ENTITY_KEYS, OPTIONAL_ENTITIES, STYLE_DEFS, ICON_DEFAULTS, MENU_KEYS, DEFAULT_MENU_KEYS,
-  SECTION_IDS, sectionOrder, WHEN_OFF, SECTION_ITEMS, MERGE_TARGETS, mergeTarget, secLabel, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
+  SECTION_IDS, sectionOrder, WHEN_OFF, STACK_MODES, SECTION_ITEMS, MERGE_TARGETS, mergeTarget, secLabel, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
   PICTURE_MODES, COLORIMETRY, CONTENT_TYPES, LENS_MEMORIES, HDR_PROCESSING, HDR_LEVEL, isNoSignal,
 };
 
