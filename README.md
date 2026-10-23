@@ -1,18 +1,10 @@
 # JVC Projector Card
 
-A Home Assistant Dashboard **custom card** for **JVC D-ILA projectors** (NZ / RS / N series): signal, picture mode and laser status at a glance, a menu remote, picture mode and dynamic control, laser power, inputs and projector info — all in one card with a visual editor. Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card).
+A Home Assistant Dashboard card for **JVC D-ILA projectors** (NZ / RS / N series). See the signal,
+picture mode and laser at a glance, and reach the remote, picture settings, laser power and inputs
+from one card, without a stray tap ever stopping your movie. Set up in a visual editor.
 
-Current build: **v2026.10.23.12** · full history in [CHANGELOG.md](CHANGELOG.md)
-
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
-
-> Requires the **JVC Projector integration** (2024 LAN spec): the Ltek version [Ltek/jvc-projector](https://github.com/Ltek/jvc-projector) (recommended: adds lens memory, anamorphic, HDR settings, Theater Optimizer, motion settings, e-shift, ECO mode, firmware version and a connection sensor, creates only what your model supports, and fixes remote lag), or the original [mjmcg/jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha).
-
----
-
-## What it shows
-
-Status sits on top. **Every control is in a collapsed section**, so nothing changes by accident; each collapsed header shows the current value.
+Current build: **v2026.10.23.12** · full history in [CHANGELOG.md](CHANGELOG.md) · every YAML option in [OPTIONS.md](OPTIONS.md)
 
 ```
  ▣  Projector ●                     2160p24 · HDR10 · Frame Adapt HDR
@@ -29,93 +21,79 @@ Status sits on top. **Every control is in a collapsed section**, so nothing chan
  ⓘ Info     DLA-NZ700                             ›
 ```
 
-- **Header** — the icon is the power button: tap to turn the projector on, **hold** for standby (a stray tap can't stop your movie). Without a hold — keyboard, screen reader — tap twice within 4 seconds: the first tap asks, the second confirms. It shows the power state: context color when on, orange and pulsing while **warming up**, cyan while **cooling down** (it can't be turned on until it reaches standby), red on **error**. The dot is the link: green = the integration reaches the projector, red = it can't; the summary then reads *Offline* in red.
-- **Standby** — choose what the card does while the projector is in standby / off: **hide the entire card**, **collapse to the header** (the default; you can still power on from it) or **keep expanded**. In the card editor it always starts expanded, so every section can be set up. Choose where the "Standby · tap the icon to power on" message goes (below, inline, hidden), or show a power button on the right. Optionally require a hold to turn on too, or hide the card in standby (it always shows while you edit the Dashboard).
-- **Collapse** — optionally tap the header to collapse the card to just the header while the projector is on, and start collapsed.
-- **Status** — two boxes, **Signal → Picture**. *Signal*: the input in the header (SIGNAL · HDMI 1), the resolution & rate, then content type, colorimetry and bit depth (`HDR10 · BT.2020 · 10-bit`; empty with no signal). *Picture*: the picture mode, dynamic control, and the laser power as a bar with *Laser 72%*. Long values wrap to two lines instead of being cut off; on a narrow card the boxes stack. Light-source hours are in Info.
-- **Tags** appear only when active: HDR10 / HDR10+ / HLG, NO SIGNAL, OUT OF RANGE, DCI, LOW LATENCY, LINK DOWN.
-- **Remote** — Hide / Info / Menu / Back, OK and arrows; **hold an arrow to repeat it 5×**. Below: one-tap menu shortcuts (MPC, Gamma, Color temp, Lens, Advanced by default — pick your own from 18 keys).
-- **Picture** — picture mode chips (the projector's modes for the current content: SDR, HDR10, HLG…) and dynamic control (Off / Low / High / Balanced). With the Ltek integration also **Lens memory** (installation mode 1–5 / 1–10, for constant-height screens), **Anamorphic** (Off / A–D), **HDR processing** and **HDR level** (only while HDR plays), **Theater Optimizer** (only while HDR plays), **Motion (CMD)** (Clear Motion Drive), **Motion enhance**, **8K e-shift** and **Low latency** (Off / On). Rows appear only for the settings your projector has, and hide while the projector disables them (CMD and Dynamic while Low latency is on).
-- **Laser** — slider, − / + buttons and **Low / Mid / High** (the projector's own laser settings).
-- **Source** — HDMI 1 / HDMI 2.
-- **Info** — model, firmware, power, signal, input, colorimetry, color depth / space, HDR signal, content type, picture settings, light-source hours and the connection state. With the Ltek integration also an **ECO mode** Off / On row, and a warning while it's on: with ECO mode on the projector switches its network off in standby, so Home Assistant can't turn it on.
-- **Context tint** — accent normally, HDR color while HDR plays.
-
-The projector is polled every 10 seconds, so a tapped option shows as **sending** (dashed, pulsing) until the projector confirms it.
+---
 
 ## Installation
 
-### HACS
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=jvc-projector-card&category=plugin)
 
-1. Click the badge above, or in HACS → **⋮ → Custom repositories** add `https://github.com/Ltek/jvc-projector-card`, category **Dashboard**.
-2. Install **JVC Projector Card** and reload the browser.
+1. Click the button above. It opens HACS in your Home Assistant with this repository filled in.
+2. Add it, then click **Download**. HACS registers the Dashboard resource for you.
+3. Hard-refresh the browser (Ctrl/Cmd + Shift + R).
+4. On a dashboard: **+ Add card → JVC Projector Card**. With one projector there is nothing to set up.
 
-### Manual
+The card is a **custom repository**, so searching HACS won't find it. If the button doesn't work:
+HACS → **⋮ → Custom repositories** → `https://github.com/Ltek/jvc-projector-card`, category **Dashboard**.
 
-Copy `jvc-projector-card.js` to `/config/www/`, then add it under **Settings → Dashboards → ⋮ → Resources** as `/local/jvc-projector-card.js` (JavaScript module).
+**Requires** a JVC Projector integration (2024 LAN spec):
 
-## Setup
+- [Ltek/jvc-projector](https://github.com/Ltek/jvc-projector) — **recommended**. Adds lens memory,
+  anamorphic, HDR settings, Theater Optimizer, motion settings, e-shift, ECO mode, firmware version and
+  a connection sensor, creates only what your model supports, and fixes remote lag.
+- or the original [mjmcg/jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha). The extra
+  settings then simply don't appear.
 
-Add a card → search **JVC Projector Card**. With one projector there is nothing to configure. The card finds the integration's entities by their translation keys, so renamed entity IDs keep working.
+---
 
-Minimal YAML:
+## Features
 
-```yaml
-type: custom:jvc-projector-card
-```
+### See what's on screen
+- **Signal → Picture**: the input, resolution and rate, then content type, colorimetry and bit depth
+  (`HDR10 · BT.2020 · 10-bit`) next to the picture mode, dynamic control and a laser power bar.
+- **Tags** for what matters right now: HDR10 / HDR10+ / HLG, no signal, out of range, DCI, low
+  latency, ECO mode, link down.
+- The card **tints in your HDR color** while HDR plays.
 
-The integration's **Model** sensor is disabled by default; enable it in **Settings → Devices & services → JVC Projector → device → Entities** to show the model in Info. Picture mode, input, dynamic control and laser power are only available while the projector is on, so those sections are dimmed in standby.
+### Safe power control
+- The header icon is the power button: **tap to turn on, hold for standby**, so a stray tap can't end
+  your movie. Keyboard and screen-reader users tap twice to confirm.
+- It shows **warming up**, **cooling down** (it can't be turned on until standby) and **error**.
+- A link dot shows whether Home Assistant can reach the projector.
+- In standby, hide the card, collapse it to the header, or keep it expanded.
 
-## Options
+### Everything one tap away, nothing by accident
+- **Every control sits in a collapsed section**; each collapsed header shows the current value.
+- **Remote**: menu, arrows and OK; **hold an arrow to repeat it 5×**. One-tap menu shortcuts (MPC,
+  Gamma, Color temp, Lens, Advanced — pick your own from 18 keys).
+- **Picture**: picture mode (only the modes for the current content), dynamic control, and with the
+  Ltek integration lens memory, anamorphic, HDR processing and level, Theater Optimizer, Clear Motion
+  Drive, Motion enhance, 8K e-shift and low latency.
+- **Laser**: slider, − / + and JVC's own **Low / Mid / High**.
+- **Source**: HDMI 1 / HDMI 2. **Info**: model, firmware, signal details, light-source hours, ECO mode
+  (with a warning, since ECO mode stops Home Assistant turning the projector on).
+- The projector is polled every 10 seconds, so a tapped option shows as *sending* until it confirms.
 
-Everything is in the visual editor (Card (with the device picker) · Sections · Buttons · Icons · Appearance). YAML keys are only written when they differ from the default.
+### Make it yours
+- **Reorder, rename, hide and merge sections**, and hide single settings or buttons you never use.
+- Your own icons, accent / HDR / warming / cooling colors, and sizes and colors for every part of the
+  card, from your theme or your own.
+- Everything is in the visual editor; YAML is optional. Only settings you change are saved.
 
-| Key | Default | Description |
-|---|---|---|
-| `device` | first projector | Device ID, if you have more than one JVC projector. |
-| `title` | `Projector` | Header title. |
-| `when_off` | `collapse` | While the projector is in standby / off: `hide` (hide the entire card), `collapse` (shrink to the header, so you can power on from it) or `expanded` (keep every section shown). The card editor always shows it expanded. The old `show_when_off: false` still works and means `hide`. |
-| `standby_text` | `below` | Standby message: `below` the title, `inline` with it, or `hidden`. |
-| `standby_message` | stock text | Your own standby message; empty = "Standby · tap the icon to power on". |
-| `standby_button` | `false` | In standby, replace the right-hand "Standby" with a power button that turns the projector on. |
-| `power_hold_on` | `false` | Require a press-and-hold to turn **on** too (standby always needs a hold or a double tap). |
-| `show_dot` | `true` | Show the link dot. |
-| `dot_position` | `title` | `title` (right of the title), `right` (far right), or `icon` (replaces the header icon; it is then the power button). |
-| `collapsible` | `false` | Tap the header to collapse the card to just the header while the projector is on. |
-| `start_collapsed` | `false` | With `collapsible`, start collapsed. |
-| `open_sections` | | Sections already open when the Dashboard loads: `remote`, `picture`, `laser`, `source`, `info`. |
-| `section_order` | `[status, remote, picture, laser, source, info]` | Order of the sections on the card. List only the ones you want first; the rest follow in the default order. In the editor: **the **Sections** panel** — one row per section with its icon, ↑ / ↓ to move it, **Open** (start open) and an **eye** to show or hide it; Remote and Laser also carry eyes for their menu shortcuts and Low / Mid / High buttons. |
-| `section_names` | | Your own name per section, e.g. `{ remote: Menu keys }`. Editor: the **pencil** on a section row → Name. |
-| `hidden_items` | | Single settings to hide, as `section.setting`, e.g. `picture.motion`, `status.picture`. Editor: pencil → **Settings**, one eye per setting. Settings that already have their own option (menu shortcuts, flows…) use that option instead. |
-| `section_merge` | | Show a section's settings inside another section, e.g. `laser: picture`: the section disappears and its visible settings appear at the end of the target, under its name. Not into a hidden section, and no chains (a section others merge into stays its own). Editor: pencil → **Merge**. |
-| `menu_keys` | `[mpc, gamma, color_temp, lens_control, advanced_menu]` | Menu shortcuts under the remote. Any of `mpc` `gamma` `color_temp` `color_profile` `gamma_settings` `pic_adj` `picture_mode` `cmd` `lens_control` `lens_ap` `anamo` `setting_memory` `mode_1` `mode_2` `mode_3` `input` `3d_format` `advanced_menu`; `[]` = none. |
-| `hide_modes` · `hide_dynamic` · `hide_inputs` · `hide_lens` | | Buttons to hide, by the integration's value (e.g. `[vivid, sdr2]`, `[off]`, `[hdmi2]`, `[memory_4, memory_5]`). The editor's **Buttons** panel lists them, each with an eye to show or hide it. |
-| `laser_step` | `5` | How much − / + change the laser power (1–50). Editor: Sections → pencil on **Laser** → Options. |
-| `show_status` · `show_remote` · `show_menus` · `show_picture` · `show_laser` · `show_laser_presets` · `show_inputs` · `show_info` | `true` | Turn parts off. |
-| `accent_color` · `hdr_color` · `warming_color` · `cooling_color` | theme primary · amber · orange · cyan | Context colors. |
-| `icons:` | | `header`, `remote`, `picture`, `laser`, `source`, `info` — any MDI name; `mdi:` is optional. |
-| `styles:` | | Sizes (px) and colors (any CSS color or theme variable) — see below. |
+### Works with your projector
+- Finds the integration's entities by their translation keys, so **renamed entities keep working**.
+- Rows appear only for the settings your model has, and hide while the projector disables them (HDR
+  settings without HDR, CMD and Dynamic while low latency is on).
+- On a narrow card the boxes stack.
 
-**`styles:` keys** — sizes: `card_radius` `card_padding` `standby_indent` `header_icon_size` `title_size` `summary_size` `section_icon_size` `section_title_size` `subtitle_size` `text_size` `secondary_size` `chip_size` `icon_size`; colors: `card_background` `card_border_color` `box_background` `divider_color` `header_icon_color` `title_color` `summary_color` `section_icon_color` `section_title_color` `subtitle_color` `text_color` `secondary_color` `chip_color` `chip_background` `chip_border_color` `icon_color`.
-
-Backgrounds and borders (`card_background`, `card_border_color`, `box_background`, `divider_color`, `chip_background`, `chip_border_color`) also accept `transparent` — the editor offers it as a choice.
-
-Example — remote first and open on load, extra lens shortcuts, no Dynamic "Off":
-
-```yaml
-type: custom:jvc-projector-card
-title: JVC NZ8
-open_sections: [remote]
-section_order: [remote, status, picture]
-menu_keys: [mpc, gamma, color_temp, lens_control, anamo, setting_memory, advanced_menu]
-hide_dynamic: [off]
-styles:
-  card_background: transparent
-```
+---
 
 ## Credits
 
-- **[mjmcg](https://github.com/mjmcg)** — the [jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha) integration this card is designed around, built on [Steve Easley](https://github.com/SteveEasley)'s pyjvcprojector.
+- **[mjmcg](https://github.com/mjmcg)** — the [jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha)
+  integration this card is designed around, built on [Steve Easley](https://github.com/SteveEasley)'s
+  pyjvcprojector.
 - [JVC](https://www.jvc.com) for the published external command communication specification.
+- Same design as the [Lumagen Card](https://github.com/Ltek/lumagen-card) and the
+  [StormAudio Card](https://github.com/Ltek/stormaudio-card).
 
 MIT licensed — see [LICENSE](LICENSE).
