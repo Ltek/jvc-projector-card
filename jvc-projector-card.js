@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.22.11
+// Version: v2026.10.23.12
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.22.11';
+const BUILD_NUMBER = 'v2026.10.23.12';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -274,7 +274,7 @@ const STYLE_GROUPS = [
   ['card', 'Card', 'Background, border and the boxes / remote keys.'],
   ['header', 'Header', 'Icon, title and the live summary on the right.'],
   ['sections', 'Section headers', 'The collapsible Remote / Picture / Laser / Source / Info rows.'],
-  ['subtitles', 'Subtitles', 'Box headings (SIGNAL / PICTURE / LASER) and row labels (Mode, Dynamic…).'],
+  ['subtitles', 'Subtitles', 'Box headings (SIGNAL / PICTURE) and row labels (Mode, Dynamic…).'],
   ['text', 'Values', 'Main values in the status boxes.'],
   ['secondary', 'Details text', 'Second lines, info rows and notes.'],
   ['chips', 'Chips & buttons', 'Picture mode / dynamic / input / menu buttons. Active chips use the context color.'],
@@ -299,7 +299,7 @@ const HIDE_LISTS = {
 // a show key is the card's own option (its eye toggles that key); the rest use hidden_items.
 const SECTION_ITEMS = {
   status: [['signal', 'Signal box', '[data-item="box-s"]'], ['picture', 'Picture box', '[data-item="box-p"]'],
-    ['laser', 'Laser box', '[data-item="box-x"]'], ['tags', 'Status tags', '[data-k="tags"]']],
+    ['laser', 'Laser bar (in the Picture box)', '[data-item="laser-row"]'], ['tags', 'Status tags', '[data-k="tags"]']],
   remote: [['pad', 'Arrows and OK', '.jvc-pad'], ['hint', '"Hold an arrow" hint', '[data-item="remote-hint"]'],
     ['menus', 'Menu shortcuts', '[data-k="menus"]', 'show_menus']],
   picture: [['mode', 'Picture mode', '[data-row="mode"]'], ['dynamic', 'Dynamic control', '[data-row="dynamic"]'],
@@ -584,10 +584,21 @@ const CARD_CSS = `
   color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
 .jvc-box { min-width: 0; padding: 8px 6px; border-radius: 10px; text-align: center; background: var(--jvc-box); }
 .jvc-box-h { font-size: var(--jvc-subtitle-size, 10px); letter-spacing: .08em; text-transform: uppercase; color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
-.jvc-box-t { font-size: var(--jvc-text-size, 14px); font-weight: 600; color: var(--jvc-text-color, var(--primary-text-color));
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.jvc-box-s { font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color));
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jvc-box-h { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jvc-box-t { font-size: var(--jvc-text-size, 14px); font-weight: 600; color: var(--jvc-text-color, var(--primary-text-color)); line-height: 1.25;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.jvc-box-s { font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color)); line-height: 1.3;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.jvc-box-s:empty { display: none; }
+.jvc-laserrow { display: flex; align-items: center; gap: 8px; margin: 6px 6px 0; }
+.jvc-laserrow .jvc-mini { flex: 1 1 auto; margin: 0; }
+.jvc-laserrow-v { flex: 0 0 auto; font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color)); font-variant-numeric: tabular-nums; }
+.jvc-status { container-type: inline-size; }
+/* Narrow card: stack Signal over Picture, the arrow points down. */
+@container (max-width: 360px) {
+  .jvc-status .jvc-chain { flex-direction: column; }
+  .jvc-status .jvc-arrow { transform: rotate(90deg); }
+}
 .jvc-mini { height: 4px; margin: 5px 10% 4px; border-radius: 2px; background: rgba(127,127,127,0.2); overflow: hidden; }
 .jvc-mini > span { display: block; height: 100%; border-radius: 2px; background: var(--jvc-ctx); transition: width .4s ease; }
 .jvc-arrow { align-self: center; color: var(--jvc-icon-color, var(--jvc-ctx)); --mdc-icon-size: 18px; }
@@ -753,13 +764,15 @@ class JvcProjectorCard extends HTMLElement {
     const dot = (where) => (dotAt === where ? `<span class="jvc-dot at-${where}" data-k="dot" data-pos="${where}"></span>` : '');
     const menus = menuKeys(c).map((k) => `<button class="jvc-chip" data-tap="remote" data-cmd="${esc(k)}">${esc(MENU_LABELS[k] || k)}</button>`).join('');
     if (this._collapsed === undefined) this._collapsed = cfg(c, 'collapsible') && cfg(c, 'start_collapsed');
-    const box = (id, title) => `<div class="jvc-box" data-item="box-${id}"><div class="jvc-box-h">${title}</div><div class="jvc-box-t" data-k="${id}_t"></div>`
-      + `${id === 'x' ? '<div class="jvc-mini"><span data-k="x_bar"></span></div>' : `<div class="jvc-box-s" data-k="${id}_1"></div>`}<div class="jvc-box-s" data-k="${id}_2"></div></div>`;
-    const arrow = '<ha-icon class="jvc-arrow" icon="mdi:chevron-right"></ha-icon>';
+    // Status: Signal → Picture, the laser as a bar inside Picture (two boxes leave room for the values).
+    const signalBox = '<div class="jvc-box" data-item="box-s"><div class="jvc-box-h" data-k="s_h">Signal</div><div class="jvc-box-t" data-k="s_t"></div><div class="jvc-box-s" data-k="s_1"></div></div>';
+    const pictureBox = '<div class="jvc-box" data-item="box-p"><div class="jvc-box-h">Picture</div><div class="jvc-box-t" data-k="p_t"></div><div class="jvc-box-s" data-k="p_1"></div>'
+      + '<div class="jvc-laserrow" data-item="laser-row"><div class="jvc-mini"><span data-k="x_bar"></span></div><span class="jvc-laserrow-v" data-k="x_t"></span></div></div>';
+    const arrow = '<ha-icon class="jvc-arrow" icon="mdi:arrow-right"></ha-icon>';
     // Each section's markup; rendered in the configured order.
     const blocks = {
-      status: `<div data-sec="status">
-            <div class="jvc-chain">${box('s', 'Signal')}${arrow}${box('p', 'Picture')}${arrow}${box('x', 'Laser')}</div>
+      status: `<div class="jvc-status" data-sec="status">
+            <div class="jvc-chain">${signalBox}${arrow}${pictureBox}</div>
             <div class="jvc-tags" data-k="tags"></div>
           </div>`,
       remote: fold('remote', 'Remote', `
@@ -1136,19 +1149,21 @@ class JvcProjectorCard extends HTMLElement {
 
     // status boxes: signal › picture › laser
     const input = pretty(INPUTS, v('input')) || pretty(INPUTS, v('input_disp'));
+    set('s_h', input ? `Signal · ${input}` : 'Signal');
     set('s_t', fmtSource(src));
-    set('s_1', input || '—');
-    set('s_2', [pretty(COLORIMETRY, v('colorimetry')), pretty(COLOR_DEPTH, v('color_depth'))].filter(Boolean).join(' · ') || '—');
+    // content type (HDR10 / SDR …), colorimetry, bit depth — empty parts drop out
+    set('s_1', live && okState(src) && !isNoSignal(src) && !isOutOfRange(src)
+      ? [pretty(CONTENT_TYPES, content), pretty(COLORIMETRY, v('colorimetry')), pretty(COLOR_DEPTH, v('color_depth'))].filter(Boolean).join(' · ') : '');
     set('p_t', pretty(PICTURE_MODES, v('mode')) || '—');
-    set('p_1', pretty(CONTENT_TYPES, content) || '—');
-    set('p_2', okState(v('dynamic')) ? `Dynamic ${pretty(DYNAMIC, v('dynamic'))}` : '—');
+    set('p_1', okState(v('dynamic')) ? `Dynamic ${pretty(DYNAMIC, v('dynamic'))}` : '');
     const L = this._laserState();
     const laserShown = this._pendingFor(E.laser, L.value) ?? L.value;
     const pct = laserShown === null ? 0 : ((Number(laserShown) - L.min) / Math.max(1, L.max - L.min)) * 100;
-    set('x_t', laserShown === null ? '—' : `${laserShown}%`);
+    set('x_t', laserShown === null ? '' : `Laser ${laserShown}%`);
+    const lrow = this.querySelector('[data-item="laser-row"]');
+    if (lrow) lrow.hidden = !E.laser;
     const w = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
     if (K.x_bar.style.width !== w) K.x_bar.style.width = w;
-    set('x_2', fmtHours(v('hours')) || '—');
 
     // tags
     const tags = [];

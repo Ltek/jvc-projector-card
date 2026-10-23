@@ -1,5 +1,14 @@
 # Changelog
 
+## v2026.10.23.12
+
+- **Status is two boxes, Signal → Picture**, with the laser as a bar inside Picture. The values have about half the width each instead of a third, so they fit.
+  - **Signal**: the input in the header (SIGNAL · HDMI 1), the resolution & rate, then content type, colorimetry and bit depth (`HDR10 · BT.2020 · 10-bit`). The details line is empty while there is no signal instead of showing the last values.
+  - **Picture**: the picture mode, dynamic control, then the laser bar with *Laser 72%*. Light-source hours moved out of the status (they are in Info and on its collapsed header).
+- Long values wrap to two lines instead of being cut off with "…"; empty lines disappear instead of showing "—".
+- On a narrow card the two boxes stack, with the arrow pointing down.
+- `status.laser` in `hidden_items` now hides the laser bar (it hid the Laser box).
+
 ## v2026.10.22.11
 
 - **Holds on a phone or tablet no longer also tap.** Lifting your finger after a hold made the browser send a tap too: holding an arrow sent 6 presses instead of 5, and holding power for standby was followed by a "tap again to confirm" prompt with the button armed. The click that ends a hold is now ignored.
