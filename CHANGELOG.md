@@ -1,5 +1,13 @@
 # Changelog
 
+## v2026.10.26.14
+
+- **The card shrinks on narrow screens** (phones, narrow grid columns). Text, chips, buttons, the remote keys, icons and the status boxes scale down step by step as the card gets narrower: 92 % under 420 px, 85 % under 360 px, 78 % under 300 px, 75 % under 240 px (no smaller, so it stays readable and tappable). Wide cards look exactly as before. On a 250 px card nothing overflows any more (before: the picture-mode chips ran 11 px past the edge and the title ran into the summary).
+- **Very narrow (under 300 px):** row labels sit above their chips, and a chip label longer than the row wraps inside the chip.
+- **The title no longer runs into the summary** in the header: the summary is cut off with "…" first.
+- **New `shrink_when_narrow`** (Card → Size → *Shrink the card on narrow screens*), on by default.
+- **Fixed: the chip / button text size setting was ignored.** A `font: inherit` rule on buttons reset their font size, so chips and remote keys used the card's 14 px instead of their own size (13 px by default, or your `chip_size`). Chips are now 1 px smaller by default, as intended.
+
 ## v2026.10.23.13
 
 - **The status boxes stay side by side on a phone.** They stacked whenever the status area was under 360 px, which is every phone in portrait. Now they stack only under 260 px (e.g. a small grid column).

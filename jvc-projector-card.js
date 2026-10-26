@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.23.13
+// Version: v2026.10.26.14
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.23.13';
+const BUILD_NUMBER = 'v2026.10.26.14';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -193,6 +193,7 @@ const DEFAULTS = {
   show_inputs: true,
   show_info: true,
   laser_step: 5,
+  shrink_when_narrow: true, // scale the whole card down on a narrow card (container query)
   stack_when_narrow: 'auto', // status boxes on a narrow card: auto (stack under 260 px) | always | never
   accent_color: '',
   hdr_color: '',
@@ -481,6 +482,7 @@ function rootStyleVars(config) {
 function rootClasses(config) {
   const st = config.styles || {};
   const cls = ['jvc', `stack-${cfg(config, 'stack_when_narrow')}`];
+  if (cfg(config, 'shrink_when_narrow')) cls.push('shrink');
   if (st.card_border_color) cls.push('has-border');
   if (st.card_background === 'transparent') cls.push('is-flat');
   return cls.join(' ');
@@ -543,12 +545,12 @@ const CARD_CSS = `
 .jvc.is-hdr { --jvc-ctx: var(--jvc-hdr, #ffb300); }
 .jvc [hidden] { display: none !important; }
 /* Buttons with a hold: no text selection or callout on a long-press (iOS / Android). */
-.jvc button { font: inherit; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.jvc button { font-family: inherit; font-weight: inherit; /* not "font: inherit" - that also reset font-size and beat .jvc-chip, so chip_size was ignored */ -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .jvc-head { display: flex; align-items: center; gap: 10px; min-height: 36px; }
-.jvc-power { flex: 0 0 auto; width: calc(var(--jvc-header-icon-size, 22px) + 14px); height: calc(var(--jvc-header-icon-size, 22px) + 14px);
+.jvc-power { flex: 0 0 auto; width: calc(calc(var(--jvc-header-icon-size, 22px) * var(--jvc-k, 1)) + 14px); height: calc(calc(var(--jvc-header-icon-size, 22px) * var(--jvc-k, 1)) + 14px);
   border-radius: 50%; border: none; cursor: pointer; background: transparent; color: var(--disabled-text-color, #777);
   display: flex; align-items: center; justify-content: center; transition: background .2s, color .2s;
-  --mdc-icon-size: var(--jvc-header-icon-size, 22px); --jvc-pwr: var(--jvc-header-icon-color, var(--jvc-ctx)); }
+  --mdc-icon-size: calc(var(--jvc-header-icon-size, 22px) * var(--jvc-k, 1)); --jvc-pwr: var(--jvc-header-icon-color, var(--jvc-ctx)); }
 .jvc.is-warming .jvc-power { --jvc-pwr: var(--jvc-warm, #ff9800); }
 .jvc.is-cooling .jvc-power { --jvc-pwr: var(--jvc-cool, #00bcd4); }
 .jvc.is-error .jvc-power { --jvc-pwr: var(--error-color, #f44336); }
@@ -556,46 +558,46 @@ const CARD_CSS = `
   color: var(--jvc-pwr); background: color-mix(in srgb, var(--jvc-pwr) 16%, transparent); }
 .jvc.is-warming .jvc-power ha-icon, .jvc.is-cooling .jvc-power ha-icon { animation: jvc-pulse 1.6s ease-in-out infinite; }
 @keyframes jvc-pulse { 50% { opacity: .4; } }
-.jvc-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--jvc-title-size, 16px); font-weight: 500; white-space: nowrap;
+.jvc-title { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; max-width: 60%; font-size: calc(var(--jvc-title-size, 16px) * var(--jvc-k, 1)); font-weight: 500; white-space: nowrap;
   color: var(--jvc-title-color, var(--primary-text-color)); }
 .jvc-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--disabled-text-color, #777); }
 .jvc-dot.at-right { margin-left: 2px; }
-.jvc-dot.at-icon { width: calc(var(--jvc-header-icon-size, 22px) * .6); height: calc(var(--jvc-header-icon-size, 22px) * .6); }
+.jvc-dot.at-icon { width: calc(calc(var(--jvc-header-icon-size, 22px) * var(--jvc-k, 1)) * .6); height: calc(calc(var(--jvc-header-icon-size, 22px) * var(--jvc-k, 1)) * .6); }
 .jvc-dot.ok { background: var(--success-color, #4caf50); }
 .jvc-dot.bad { background: var(--error-color, #f44336); }
-.jvc-summary { margin-left: auto; min-width: 0; font-size: var(--jvc-summary-size, 13px); color: var(--jvc-summary-color, var(--secondary-text-color));
+.jvc-summary { margin-left: auto; min-width: 0; font-size: calc(var(--jvc-summary-size, 13px) * var(--jvc-k, 1)); color: var(--jvc-summary-color, var(--secondary-text-color));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jvc.is-down .jvc-summary, .jvc.is-error .jvc-summary { color: var(--error-color, #f44336); }
 .jvc.is-warming .jvc-summary { color: var(--jvc-warm, #ff9800); }
 .jvc.is-cooling .jvc-summary { color: var(--jvc-cool, #00bcd4); }
 .jvc-head.is-tap { cursor: pointer; }
-.jvc-hchev { color: var(--secondary-text-color); --mdc-icon-size: 20px; transition: transform .2s; flex: 0 0 auto; }
+.jvc-hchev { color: var(--secondary-text-color); --mdc-icon-size: calc(20px * var(--jvc-k, 1)); transition: transform .2s; flex: 0 0 auto; }
 .jvc.is-collapsed .jvc-hchev { transform: rotate(-90deg); }
 .jvc.is-collapsed .jvc-body { display: none; }
-.jvc-sb-inline { margin-left: max(0px, calc(var(--jvc-standby-indent, 46px) - 46px)); font-size: var(--jvc-secondary-size, 12px); font-weight: 400; color: var(--jvc-secondary-color, var(--secondary-text-color));
+.jvc-sb-inline { margin-left: max(0px, calc(var(--jvc-standby-indent, 46px) - 46px)); font-size: calc(var(--jvc-secondary-size, 12px) * var(--jvc-k, 1)); font-weight: 400; color: var(--jvc-secondary-color, var(--secondary-text-color));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.jvc-pwr2 { margin-left: auto; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+.jvc-pwr2 { margin-left: auto; flex: 0 0 auto; width: calc(34px * var(--jvc-k, 1)); height: calc(34px * var(--jvc-k, 1)); border-radius: 50%; border: none; cursor: pointer;
   background: var(--jvc-box); color: var(--jvc-header-icon-color, var(--jvc-ctx)); display: flex; align-items: center; justify-content: center;
-  --mdc-icon-size: 20px; }
+  --mdc-icon-size: calc(20px * var(--jvc-k, 1)); }
 .jvc-pwr2:hover { background: color-mix(in srgb, var(--jvc-ctx) 20%, transparent); }
-.jvc-standby { padding: 2px 0 2px var(--jvc-standby-indent, 46px); font-size: var(--jvc-secondary-size, 13px); color: var(--jvc-secondary-color, var(--secondary-text-color)); }
+.jvc-standby { padding: 2px 0 2px var(--jvc-standby-indent, 46px); font-size: calc(var(--jvc-secondary-size, 13px) * var(--jvc-k, 1)); color: var(--jvc-secondary-color, var(--secondary-text-color)); }
 .jvc-chain { display: flex; gap: 6px; margin-top: 10px; }
 .jvc-chain > .jvc-box { flex: 1 1 0; }
 .jvc-uhide, .jvc-away { display: none !important; }
 .jvc-merged { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--jvc-divider-color, rgba(127,127,127,0.2)); }
-.jvc-merged-h { margin-bottom: 4px; font-size: var(--jvc-subtitle-size, 10px); letter-spacing: .08em; text-transform: uppercase;
+.jvc-merged-h { margin-bottom: 4px; font-size: calc(var(--jvc-subtitle-size, 10px) * var(--jvc-k, 1)); letter-spacing: .08em; text-transform: uppercase;
   color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
-.jvc-box { min-width: 0; padding: 8px 6px; border-radius: 10px; text-align: center; background: var(--jvc-box); }
-.jvc-box-h { font-size: var(--jvc-subtitle-size, 10px); letter-spacing: .08em; text-transform: uppercase; color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
+.jvc-box { min-width: 0; padding: calc(8px * var(--jvc-k, 1)) calc(6px * var(--jvc-k, 1)); border-radius: 10px; text-align: center; background: var(--jvc-box); }
+.jvc-box-h { font-size: calc(var(--jvc-subtitle-size, 10px) * var(--jvc-k, 1)); letter-spacing: .08em; text-transform: uppercase; color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
 .jvc-box-h { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.jvc-box-t { font-size: var(--jvc-text-size, 14px); font-weight: 600; color: var(--jvc-text-color, var(--primary-text-color)); line-height: 1.25;
+.jvc-box-t { font-size: calc(var(--jvc-text-size, 14px) * var(--jvc-k, 1)); font-weight: 600; color: var(--jvc-text-color, var(--primary-text-color)); line-height: 1.25;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
-.jvc-box-s { font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color)); line-height: 1.3;
+.jvc-box-s { font-size: calc(var(--jvc-secondary-size, 12px) * var(--jvc-k, 1)); color: var(--jvc-secondary-color, var(--secondary-text-color)); line-height: 1.3;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .jvc-box-s:empty { display: none; }
 .jvc-laserrow { display: flex; align-items: center; gap: 8px; margin: 6px 6px 0; }
 .jvc-laserrow .jvc-mini { flex: 1 1 auto; margin: 0; }
-.jvc-laserrow-v { flex: 0 0 auto; font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color)); font-variant-numeric: tabular-nums; }
+.jvc-laserrow-v { flex: 0 0 auto; font-size: calc(var(--jvc-secondary-size, 12px) * var(--jvc-k, 1)); color: var(--jvc-secondary-color, var(--secondary-text-color)); font-variant-numeric: tabular-nums; }
 .jvc-status { container-type: inline-size; }
 /* Narrow card: stack Signal over Picture, the arrow points down. */
 /* Stacking (stack_when_narrow): auto stacks the boxes only on a really narrow card (status area under
@@ -608,29 +610,29 @@ const CARD_CSS = `
 .jvc.stack-always .jvc-status .jvc-arrow { transform: rotate(90deg); }
 .jvc-mini { height: 4px; margin: 5px 10% 4px; border-radius: 2px; background: rgba(127,127,127,0.2); overflow: hidden; }
 .jvc-mini > span { display: block; height: 100%; border-radius: 2px; background: var(--jvc-ctx); transition: width .4s ease; }
-.jvc-arrow { align-self: center; color: var(--jvc-icon-color, var(--jvc-ctx)); --mdc-icon-size: 18px; }
+.jvc-arrow { align-self: center; color: var(--jvc-icon-color, var(--jvc-ctx)); --mdc-icon-size: calc(18px * var(--jvc-k, 1)); }
 .jvc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .jvc-tags:empty { display: none; }
-.jvc-tag { padding: 1px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 11px; font-weight: 600;
+.jvc-tag { padding: 1px calc(8px * var(--jvc-k, 1)); border: 1px solid currentColor; border-radius: 999px; font-size: calc(11px * var(--jvc-k, 1)); font-weight: 600;
   letter-spacing: .04em; color: var(--secondary-text-color); }
 .jvc-tag.hdr { color: var(--jvc-hdr, #ffb300); }
 .jvc-tag.ctx { color: var(--jvc-ctx); }
 .jvc-tag.bad { color: var(--error-color, #f44336); }
 .jvc-fold { margin-top: 10px; border-top: 1px solid var(--jvc-divider-color, rgba(127,127,127,0.2)); }
 .jvc-fold > summary { display: flex; align-items: center; gap: 8px; padding: 8px 0 2px; cursor: pointer; list-style: none;
-  font-size: var(--jvc-section-title-size, 14px); color: var(--jvc-section-title-color, var(--primary-text-color)); user-select: none; }
+  font-size: calc(var(--jvc-section-title-size, 14px) * var(--jvc-k, 1)); color: var(--jvc-section-title-color, var(--primary-text-color)); user-select: none; }
 .jvc-fold > summary::-webkit-details-marker { display: none; }
-.jvc-fold > summary .jvc-sec-i { color: var(--jvc-section-icon-color, var(--jvc-ctx)); --mdc-icon-size: var(--jvc-section-icon-size, 18px); }
-.jvc-fold > summary .jvc-chev { margin-left: auto; color: var(--secondary-text-color); --mdc-icon-size: 18px; transition: transform .2s; }
+.jvc-fold > summary .jvc-sec-i { flex: none; color: var(--jvc-section-icon-color, var(--jvc-ctx)); --mdc-icon-size: calc(var(--jvc-section-icon-size, 18px) * var(--jvc-k, 1)); }
+.jvc-fold > summary .jvc-chev { flex: none; margin-left: auto; color: var(--secondary-text-color); --mdc-icon-size: calc(18px * var(--jvc-k, 1)); transition: transform .2s; }
 .jvc-fold[open] > summary .jvc-chev { transform: rotate(90deg); }
-.jvc-fold > summary .jvc-peek { font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color));
+.jvc-fold > summary .jvc-peek { flex: 1 1 0; font-size: calc(var(--jvc-secondary-size, 12px) * var(--jvc-k, 1)); color: var(--jvc-secondary-color, var(--secondary-text-color));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .jvc-row { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; }
-.jvc-row-l { flex: 0 0 88px; padding-top: 6px; font-size: var(--jvc-subtitle-size, 12px); color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
+.jvc-row-l { flex: 0 0 calc(88px * var(--jvc-k, 1)); padding-top: 6px; font-size: calc(var(--jvc-subtitle-size, 12px) * var(--jvc-k, 1)); color: var(--jvc-subtitle-color, var(--secondary-text-color)); }
 .jvc-opts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.jvc-chip { padding: 5px 10px; border: 1px solid var(--jvc-chip-border-color, rgba(127,127,127,0.35)); border-radius: 8px; cursor: pointer;
+.jvc-chip { padding: calc(5px * var(--jvc-k, 1)) calc(10px * var(--jvc-k, 1)); border: 1px solid var(--jvc-chip-border-color, rgba(127,127,127,0.35)); border-radius: 8px; cursor: pointer;
   background: var(--jvc-chip-background, transparent); color: var(--jvc-chip-color, var(--primary-text-color));
-  font-size: var(--jvc-chip-size, 13px); white-space: nowrap; transition: background .2s, border-color .2s; }
+  font-size: calc(var(--jvc-chip-size, 13px) * var(--jvc-k, 1)); white-space: nowrap; transition: background .2s, border-color .2s; }
 .jvc-chip:hover { border-color: var(--jvc-ctx); }
 .jvc-chip.on { background: var(--jvc-ctx); border-color: var(--jvc-ctx); color: #fff; }
 .jvc-chip.ro { cursor: default; }
@@ -639,26 +641,43 @@ const CARD_CSS = `
 .jvc-held { outline: 2px solid var(--jvc-ctx); outline-offset: 1px; }
 .jvc.is-off .jvc-ctl, .jvc.is-down .jvc-ctl { opacity: .45; pointer-events: none; }
 .jvc.is-down [data-sec="status"] .jvc-chain { opacity: .45; }
-.jvc-pad { display: grid; grid-template-columns: repeat(3, 64px); grid-auto-rows: 44px; gap: 6px; justify-content: center; margin-top: 6px; }
+.jvc-pad { display: grid; grid-template-columns: repeat(3, calc(64px * var(--jvc-k, 1))); grid-auto-rows: calc(44px * var(--jvc-k, 1)); gap: 6px; justify-content: center; margin-top: 6px; }
 .jvc-key { display: flex; align-items: center; justify-content: center; border: none; border-radius: 10px; cursor: pointer;
-  background: var(--jvc-box); color: var(--jvc-icon-color, var(--primary-text-color)); font-size: var(--jvc-chip-size, 12px);
-  --mdc-icon-size: var(--jvc-icon-size, 22px); }
+  background: var(--jvc-box); color: var(--jvc-icon-color, var(--primary-text-color)); font-size: calc(var(--jvc-chip-size, 12px) * var(--jvc-k, 1));
+  --mdc-icon-size: calc(var(--jvc-icon-size, 22px) * var(--jvc-k, 1)); }
 .jvc-key:hover { background: color-mix(in srgb, var(--jvc-ctx) 20%, transparent); }
 .jvc-key.ok { background: color-mix(in srgb, var(--jvc-ctx) 30%, transparent); color: var(--jvc-ctx); }
 .jvc-key.sm { color: var(--jvc-chip-color, var(--secondary-text-color)); }
 .jvc-menus { justify-content: center; margin-top: 10px; }
 .jvc-laser { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.jvc-laser .jvc-key { flex: 0 0 40px; height: 36px; }
-.jvc-range { flex: 1 1 auto; min-width: 80px; accent-color: var(--jvc-ctx); cursor: pointer; }
-.jvc-laser-v { flex: 0 0 44px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums;
-  font-size: var(--jvc-text-size, 14px); color: var(--jvc-text-color, var(--primary-text-color)); }
+.jvc-laser .jvc-key { flex: 0 0 calc(40px * var(--jvc-k, 1)); height: calc(36px * var(--jvc-k, 1)); }
+.jvc-range { flex: 1 1 auto; min-width: calc(60px * var(--jvc-k, 1)); accent-color: var(--jvc-ctx); cursor: pointer; }
+.jvc-laser-v { flex: 0 0 calc(44px * var(--jvc-k, 1)); text-align: right; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: calc(var(--jvc-text-size, 14px) * var(--jvc-k, 1)); color: var(--jvc-text-color, var(--primary-text-color)); }
 .jvc-info { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px 12px; margin-top: 8px;
-  font-size: var(--jvc-secondary-size, 12px); color: var(--jvc-secondary-color, var(--secondary-text-color)); }
+  font-size: calc(var(--jvc-secondary-size, 12px) * var(--jvc-k, 1)); color: var(--jvc-secondary-color, var(--secondary-text-color)); }
 .jvc-info > b { font-weight: 500; color: var(--jvc-text-color, var(--primary-text-color)); text-align: right;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.jvc-note { margin-top: 8px; font-size: var(--jvc-secondary-size, 12px); line-height: 1.5; color: var(--jvc-secondary-color, var(--secondary-text-color)); }
+.jvc-note { margin-top: 8px; font-size: calc(var(--jvc-secondary-size, 12px) * var(--jvc-k, 1)); line-height: 1.5; color: var(--jvc-secondary-color, var(--secondary-text-color)); }
 .jvc-note.bad { color: var(--error-color, #f44336); }
-.jvc-hint { margin-top: 4px; font-size: 11px; color: var(--secondary-text-color); text-align: center; }
+.jvc-hint { margin-top: 4px; font-size: calc(11px * var(--jvc-k, 1)); color: var(--secondary-text-color); text-align: center; }
+.jvc-title > span:first-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.jvc-summary { flex: 1 1 0; text-align: right; }
+/* Narrow cards (shrink_when_narrow): the whole card scales down, so nothing overflows on a phone or a
+   narrow grid column. --jvc-k multiplies every size above; it is set on the card's children because a
+   container query styles the container's descendants, not the container itself. */
+.jvc { container: jvccard / inline-size; }
+@container jvccard (max-width: 420px) { .jvc.shrink > * { --jvc-k: .92; } }
+@container jvccard (max-width: 360px) { .jvc.shrink > * { --jvc-k: .85; } }
+@container jvccard (max-width: 300px) {
+  .jvc.shrink > * { --jvc-k: .78; }
+  .jvc.shrink .jvc-row { flex-direction: column; gap: 4px; }
+  .jvc.shrink .jvc-row-l { flex: none; padding-top: 0; }
+  .jvc.shrink .jvc-laser { gap: 6px; }
+  /* a chip label longer than the row wraps inside the chip instead of running past the card */
+  .jvc.shrink .jvc-opts .jvc-chip { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+}
+@container jvccard (max-width: 240px) { .jvc.shrink > * { --jvc-k: .75; } }
 `;
 
 // ---------------------------------------------------------------------------
@@ -1714,6 +1733,10 @@ class JvcProjectorCardEditor extends HTMLElement {
       <p class="jvce-hint">Green when the integration reaches the projector, red when it can't.</p>
       <div class="jvce-row"><label class="jvce-check"><input type="checkbox" data-key="show_dot"${cfg(c, 'show_dot') ? ' checked' : ''}>Show</label>
         ${cfg(c, 'show_dot') ? `<select data-key="dot_position">${DOT_POSITIONS.map(([v, n]) => `<option value="${v}"${v === cfg(c, 'dot_position') ? ' selected' : ''}>${n}</option>`).join('')}</select>` : ''}</div>
+      <div class="jvce-group">Size</div>
+      <label class="jvce-check"><input type="checkbox" data-key="shrink_when_narrow"${cfg(c, 'shrink_when_narrow') ? ' checked' : ''}>
+        Shrink the card on narrow screens (phones, narrow grid columns)</label>
+      <p class="jvce-hint">Text, buttons, chips, the remote and icons scale down step by step below 420 px, so nothing overflows.</p>
       <div class="jvce-group">Collapse</div>
       <label class="jvce-check"><input type="checkbox" data-key="collapsible"${cfg(c, 'collapsible') ? ' checked' : ''}>
         Tap the header to collapse the card to just the header (while the projector is on)</label>
