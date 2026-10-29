@@ -1,5 +1,10 @@
 # Changelog
 
+## v2026.10.29.15
+
+- **The status boxes drop the Signal / Picture words: the Signal box's top line names only the input (HDMI 1), the Picture box's is empty (it keeps its height so the rows stay level).** The boxes' places already say which side is which.
+- **Size, weight and color for each row of the status boxes**, set once for both boxes: Appearance → **Status box rows**: Input name, Resolution · picture mode, Signal details · dynamic control, Laser. YAML: `styles: flow_<name|row1|row2|row3>_<size|weight|color>`. A row left at its default follows Subtitles / Values / Details text as before, so nothing changes until you set one. The two boxes show different things on rows 1 and 2 (the signal and the projector's picture settings), so a row style applies to both by position.
+
 ## v2026.10.26.14
 
 - **The card shrinks on narrow screens** (phones, narrow grid columns). Text, chips, buttons, the remote keys, icons and the status boxes scale down step by step as the card gets narrower: 92 % under 420 px, 85 % under 360 px, 78 % under 300 px, 75 % under 240 px (no smaller, so it stays readable and tappable). Wide cards look exactly as before. On a 250 px card nothing overflows any more (before: the picture-mode chips ran 11 px past the edge and the title ran into the summary).

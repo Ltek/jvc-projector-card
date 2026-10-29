@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.26.14
+// Version: v2026.10.29.15
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.26.14';
+const BUILD_NUMBER = 'v2026.10.29.15';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -271,18 +271,44 @@ const STYLE_DEFS = [
   ['icon_size', 'icons', 'size', 'Size', 22, 14, 40],
   ['icon_color', 'icons', 'color', 'Color', 'Primary text'],
   ['standby_indent', 'standby', 'size', 'Standby message indent', 46, 0, 160],
+  ['flow_name_size', 'flow', 'size', 'Size', 10, 7, 30, 'subtitle_size'],
+  ['flow_name_weight', 'flow', 'weight', 'Weight', '400'],
+  ['flow_name_color', 'flow', 'color', 'Color', 'Follows Subtitles color'],
+  ['flow_row1_size', 'flow', 'size', 'Size', 14, 7, 30, 'text_size'],
+  ['flow_row1_weight', 'flow', 'weight', 'Weight', '600'],
+  ['flow_row1_color', 'flow', 'color', 'Color', 'Follows Values color'],
+  ['flow_row2_size', 'flow', 'size', 'Size', 12, 7, 30, 'secondary_size'],
+  ['flow_row2_weight', 'flow', 'weight', 'Weight', '400'],
+  ['flow_row2_color', 'flow', 'color', 'Color', 'Follows Details color'],
+  ['flow_row3_size', 'flow', 'size', 'Size', 12, 7, 30, 'secondary_size'],
+  ['flow_row3_weight', 'flow', 'weight', 'Weight', '400'],
+  ['flow_row3_color', 'flow', 'color', 'Color', 'Follows Details color'],
 ];
 const STYLE_GROUPS = [
   ['card', 'Card', 'Background, border and the boxes / remote keys.'],
   ['header', 'Header', 'Icon, title and the live summary on the right.'],
   ['sections', 'Section headers', 'The collapsible Remote / Picture / Laser / Source / Info rows.'],
-  ['subtitles', 'Subtitles', 'Box headings (SIGNAL / PICTURE) and row labels (Mode, Dynamic…).'],
+  ['subtitles', 'Subtitles', 'Box headings (the input name) and row labels (Mode, Dynamic…).'],
   ['text', 'Values', 'Main values in the status boxes.'],
   ['secondary', 'Details text', 'Second lines, info rows and notes.'],
+  ['flow', 'Status box rows', 'Each row of the Signal and Picture boxes, in both boxes at once. A setting left at its default follows Subtitles, Values or Details text.'],
   ['chips', 'Chips & buttons', 'Picture mode / dynamic / input / menu buttons. Active chips use the context color.'],
   ['icons', 'Icons', 'Remote key icons and the status arrows.'],
 ];
 const STYLE_INDEX = Object.fromEntries(STYLE_DEFS.map((d) => [d[0], d]));
+// The status box rows (Appearance → Status box rows): [row id, editor label]. Each has a size, weight and color.
+const FLOW_ROWS = [['name', 'Input name (top line)'], ['row1', 'Resolution · picture mode'], ['row2', 'Signal details · dynamic control'], ['row3', 'Laser']];
+const WEIGHTS = [['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['600', 'Semibold'], ['700', 'Bold']];
+/** A style's value when it isn't set: a row size follows the general size it inherits (index 7). */
+function styleDefault(styles, key) {
+  const def = STYLE_INDEX[key];
+  if (!def) return undefined;
+  if (def[7]) {
+    const v = Number((styles || {})[def[7]]);
+    return Number.isFinite(v) && (styles || {})[def[7]] !== '' ? Math.round(v) : STYLE_INDEX[def[7]][4];
+  }
+  return def[4];
+}
 // Backgrounds and borders also offer "Transparent".
 const TRANSPARENT_KEYS = new Set(['card_background', 'card_border_color', 'box_background', 'divider_color', 'chip_background', 'chip_border_color']);
 const DOT_POSITIONS = [['title', 'Right of the title'], ['right', 'Far right'], ['icon', 'Replace the header icon']];
@@ -415,9 +441,12 @@ function normalizeConfig(raw) {
       if (!def) { styles[k] = v; return; } // unknown (newer build): keep verbatim
       if (def[2] === 'size') {
         v = Number(v);
-        if (!Number.isFinite(v) || v === def[4]) return;
+        if (!Number.isFinite(v)) return;
         v = Math.round(Math.min(def[6], Math.max(def[5], v)));
-        if (v === def[4]) return;
+        if (v === styleDefault(c.styles, k)) return;
+      } else if (def[2] === 'weight') {
+        v = String(v).trim();
+        if (!WEIGHTS.some(([w]) => w === v) || v === def[4]) return;
       } else v = String(v).trim();
       if (v !== '') styles[k] = v;
     });
@@ -663,6 +692,14 @@ const CARD_CSS = `
 .jvc-hint { margin-top: 4px; font-size: calc(11px * var(--jvc-k, 1)); color: var(--secondary-text-color); text-align: center; }
 .jvc-title > span:first-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .jvc-summary { flex: 1 1 0; text-align: right; }
+/* Status box rows (styles flow_*): each row's size, weight and color, in both boxes at once. Unset, a row
+   follows the general setting (Subtitles / Values / Details text). An empty top line keeps its height so
+   the rows of the two boxes stay level. */
+.jvc-chain .jvc-box-h { font-size: calc(var(--jvc-flow-name-size, var(--jvc-subtitle-size, 10px)) * var(--jvc-k, 1)); font-weight: var(--jvc-flow-name-weight, 400); color: var(--jvc-flow-name-color, var(--jvc-subtitle-color, var(--secondary-text-color))); }
+.jvc-chain .jvc-box-t { font-size: calc(var(--jvc-flow-row1-size, var(--jvc-text-size, 14px)) * var(--jvc-k, 1)); font-weight: var(--jvc-flow-row1-weight, 600); color: var(--jvc-flow-row1-color, var(--jvc-text-color, var(--primary-text-color))); }
+.jvc-chain .jvc-box-s { font-size: calc(var(--jvc-flow-row2-size, var(--jvc-secondary-size, 12px)) * var(--jvc-k, 1)); font-weight: var(--jvc-flow-row2-weight, 400); color: var(--jvc-flow-row2-color, var(--jvc-secondary-color, var(--secondary-text-color))); }
+.jvc-chain .jvc-laserrow-v { font-size: calc(var(--jvc-flow-row3-size, var(--jvc-secondary-size, 12px)) * var(--jvc-k, 1)); font-weight: var(--jvc-flow-row3-weight, 400); color: var(--jvc-flow-row3-color, var(--jvc-secondary-color, var(--secondary-text-color))); }
+.jvc-chain .jvc-box-h { min-height: 1.2em; line-height: 1.2; }
 /* Narrow cards (shrink_when_narrow): the whole card scales down, so nothing overflows on a phone or a
    narrow grid column. --jvc-k multiplies every size above; it is set on the card's children because a
    container query styles the container's descendants, not the container itself. */
@@ -791,8 +828,8 @@ class JvcProjectorCard extends HTMLElement {
     const menus = menuKeys(c).map((k) => `<button class="jvc-chip" data-tap="remote" data-cmd="${esc(k)}">${esc(MENU_LABELS[k] || k)}</button>`).join('');
     if (this._collapsed === undefined) this._collapsed = cfg(c, 'collapsible') && cfg(c, 'start_collapsed');
     // Status: Signal → Picture, the laser as a bar inside Picture (two boxes leave room for the values).
-    const signalBox = '<div class="jvc-box" data-item="box-s"><div class="jvc-box-h" data-k="s_h">Signal</div><div class="jvc-box-t" data-k="s_t"></div><div class="jvc-box-s" data-k="s_1"></div></div>';
-    const pictureBox = '<div class="jvc-box" data-item="box-p"><div class="jvc-box-h">Picture</div><div class="jvc-box-t" data-k="p_t"></div><div class="jvc-box-s" data-k="p_1"></div>'
+    const signalBox = '<div class="jvc-box" data-item="box-s"><div class="jvc-box-h" data-k="s_h"></div><div class="jvc-box-t" data-k="s_t"></div><div class="jvc-box-s" data-k="s_1"></div></div>';
+    const pictureBox = '<div class="jvc-box" data-item="box-p"><div class="jvc-box-h"></div><div class="jvc-box-t" data-k="p_t"></div><div class="jvc-box-s" data-k="p_1"></div>'
       + '<div class="jvc-laserrow" data-item="laser-row"><div class="jvc-mini"><span data-k="x_bar"></span></div><span class="jvc-laserrow-v" data-k="x_t"></span></div></div>';
     const arrow = '<ha-icon class="jvc-arrow" icon="mdi:arrow-right"></ha-icon>';
     // Each section's markup; rendered in the configured order.
@@ -1175,7 +1212,7 @@ class JvcProjectorCard extends HTMLElement {
 
     // status boxes: signal › picture › laser
     const input = pretty(INPUTS, v('input')) || pretty(INPUTS, v('input_disp'));
-    set('s_h', input ? `Signal · ${input}` : 'Signal');
+    set('s_h', input || ''); // the boxes' places say signal and picture: the top line names only the input
     set('s_t', fmtSource(src));
     // content type (HDR10 / SDR …), colorimetry, bit depth — empty parts drop out
     set('s_1', live && okState(src) && !isNoSignal(src) && !isOutOfRange(src)
@@ -1570,6 +1607,22 @@ class JvcProjectorCardEditor extends HTMLElement {
       ${field}</div></div>`;
   }
 
+  /** One Appearance control for a STYLE_DEFS entry. */
+  _styleControl([key, , kind, label, def, min, max], st) {
+    if (kind === 'size') return this._slider(key, label, st[key] !== undefined ? st[key] : styleDefault(st, key), min, max, 1, 'styles');
+    if (kind === 'weight') return this._weightControl(key, label, def);
+    return this._colorControl(key, label, def, '#2196f3', 'styles');
+  }
+
+  /** Font weight select (styles): '' = the row's default. */
+  _weightControl(key, label, def) {
+    const cur = this._get(key, 'styles') || '';
+    const name = (WEIGHTS.find(([w]) => w === def) || [, def])[1];
+    return `<div class="jvce-row"><label class="lbl">${label}</label><select data-wkey="${key}">
+      <option value=""${cur ? '' : ' selected'}>Default (${name})</option>
+      ${WEIGHTS.map(([w, n]) => `<option value="${w}"${w === cur ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
+  }
+
   _slider(key, label, value, min, max, step, scope = '', fmt = (n) => `${n}px`) {
     const isSet = this._get(key, scope) !== undefined;
     return `<div class="jvce-row jvce-nowrap"><label class="lbl">${label}</label>
@@ -1754,9 +1807,9 @@ class JvcProjectorCardEditor extends HTMLElement {
           <input type="text" data-icon="${k}" value="${esc(((c.icons || {})[k] || '').replace(/^mdi:/, ''))}" placeholder="${ICON_DEFAULTS[k].replace(/^mdi:/, '')}"></div>`).join('')}`;
     const looks = STYLE_GROUPS.map(([g, title, hint]) => this._sub(`look-${g}`, title, `
       <p class="jvce-hint">${hint}</p>
-      ${STYLE_DEFS.filter((d) => d[1] === g).map(([key, , kind, label, def, min, max]) => (kind === 'size'
-        ? this._slider(key, label, st[key] !== undefined ? st[key] : def, min, max, 1, 'styles')
-        : this._colorControl(key, label, def, '#2196f3', 'styles'))).join('')}`)).join('')
+      ${g === 'flow'
+        ? FLOW_ROWS.map(([rid, rlabel]) => `<div class="jvce-group">${rlabel}</div>${STYLE_DEFS.filter((d) => d[0].startsWith(`flow_${rid}_`)).map((d) => this._styleControl(d, st)).join('')}`).join('')
+        : STYLE_DEFS.filter((d) => d[1] === g).map((d) => this._styleControl(d, st)).join('')}`)).join('')
       + this._sub('look-context', 'Context colors', `
       <p class="jvce-hint">The card tints itself by context: the accent normally and the HDR color while HDR plays. The header icon turns the warming / cooling color while the projector changes power state.</p>
       ${CONTEXT_COLORS.map(([k, l, d, seed]) => this._colorControl(k, l, d, seed)).join('')}`);
@@ -1795,8 +1848,7 @@ class JvcProjectorCardEditor extends HTMLElement {
       el.addEventListener('change', () => {
         const n = Number(el.value);
         if (scope) {
-          const def = STYLE_INDEX[key];
-          this._set(key, def && n === def[4] ? '' : n, scope);
+          this._set(key, STYLE_INDEX[key] && n === styleDefault(this._config.styles, key) ? '' : n, scope);
         } else this._set(key, n);
         this._render();
       });
@@ -1876,6 +1928,10 @@ class JvcProjectorCardEditor extends HTMLElement {
       this._emit();
       this._render();
     }));
+    this.querySelectorAll('[data-wkey]').forEach((sel) => sel.addEventListener('change', () => {
+      this._set(sel.dataset.wkey, sel.value, 'styles');
+      this._render();
+    }));
     this.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => {
       this._set(b.dataset.reset, '', b.dataset.scope);
       this._render();
@@ -1910,7 +1966,7 @@ class JvcProjectorCardEditor extends HTMLElement {
 // Test hooks (pure helpers; no effect in the browser)
 JvcProjectorCard._test = {
   BUILD_NUMBER, CARD_CSS, EDITOR_CSS, DEFAULTS, ENTITY_KEYS, OPTIONAL_ENTITIES, STYLE_DEFS, ICON_DEFAULTS, MENU_KEYS, DEFAULT_MENU_KEYS,
-  SECTION_IDS, sectionOrder, WHEN_OFF, STACK_MODES, SECTION_ITEMS, MERGE_TARGETS, mergeTarget, secLabel, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
+  SECTION_IDS, sectionOrder, WHEN_OFF, STACK_MODES, FLOW_ROWS, WEIGHTS, styleDefault, SECTION_ITEMS, MERGE_TARGETS, mergeTarget, secLabel, normalizeConfig, normalizeIcon, rootStyleVars, rootClasses, resolveEntities, listDevices, fmtSource, fmtHours, pretty, powerOf, colorMode,
   PICTURE_MODES, COLORIMETRY, CONTENT_TYPES, LENS_MEMORIES, HDR_PROCESSING, HDR_LEVEL, isNoSignal,
 };
 
