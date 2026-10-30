@@ -1,5 +1,9 @@
 # Changelog
 
+## v2026.10.30.16
+
+- **Named "JVC Projector Card (Ltek)" in Home Assistant's *Add card* picker**, matching its HACS name, so searching "Ltek" finds it. The card type is unchanged, so existing dashboards are not affected.
+
 ## v2026.10.29.15
 
 - **The status boxes drop the Signal / Picture words: the Signal box's top line names only the input (HDMI 1), the Picture box's is empty (it keeps its height so the rows stay level).** The boxes' places already say which side is which.

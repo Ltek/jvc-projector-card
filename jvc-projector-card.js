@@ -1,5 +1,5 @@
 // JVC Projector Card — Home Assistant Dashboard card for JVC D-ILA projectors
-// Version: v2026.10.29.15
+// Version: v2026.10.30.16
 //
 // Read-only status on top (signal → picture → laser, status tags); every control
 // lives in a collapsed section (Remote, Picture, Laser, Source, Info) so nothing
@@ -12,7 +12,7 @@
 // card root. Entities are found by the integration's translation keys, so renamed
 // entity IDs keep working; disabled entities simply don't appear.
 
-const BUILD_NUMBER = 'v2026.10.29.15';
+const BUILD_NUMBER = 'v2026.10.30.16';
 const CARD_TAG = 'jvc-projector-card';
 const EDITOR_TAG = 'jvc-projector-card-editor';
 const PLATFORM = 'jvc_projector_ha';
@@ -1977,7 +1977,7 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === CARD_TAG)) {
   window.customCards.push({
     type: CARD_TAG,
-    name: 'JVC Projector Card',
+    name: 'JVC Projector Card (Ltek)',
     description: 'JVC D-ILA projector: signal, picture and laser status, and collapsible remote, picture mode, laser, input and info sections.',
     preview: false,
     documentationURL: 'https://github.com/Ltek/jvc-projector-card',
