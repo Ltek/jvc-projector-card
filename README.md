@@ -88,6 +88,40 @@ HACS → **⋮ → Custom repositories** → `https://github.com/Ltek/jvc-projec
 
 ---
 
+## Screenshots
+
+Drop images into `screenshots/` and push: GitHub rebuilds this gallery by itself. The pictures here
+show a made-up device, so names and values on yours will differ.
+
+<!-- SCREENSHOTS:START -->
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/01-playing-hdr.png" width="100%" alt="01 playing hdr">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/02-remote-open.png" width="100%" alt="02 remote open">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/03-picture-and-laser.png" width="100%" alt="03 picture and laser">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/04-light-theme.png" width="100%" alt="04 light theme">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/05-warming-up.png" width="100%" alt="05 warming up">
+    </td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+<!-- SCREENSHOTS:END -->
+
+---
+
 ## Credits
 
 - **[mjmcg](https://github.com/mjmcg)** — the [jvc_projector_ha](https://github.com/mjmcg/jvc_projector_ha)
